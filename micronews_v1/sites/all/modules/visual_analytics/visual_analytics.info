@@ -1,0 +1,11 @@
+name = Visual Analytics
+description = For making Theme specific changes
+
+package = Custom
+
+core = 7.x
+
+files[] = visual_analytics.module
+
+
+

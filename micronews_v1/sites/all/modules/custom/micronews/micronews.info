@@ -1,0 +1,19 @@
+name = MicroNews
+description = Entity for MicroNews.
+core = 7.x
+
+
+dependencies[] = entity
+dependencies[] = views
+
+package = "MicroNews"
+
+files[] = micronews.admin.inc
+files[] = micronews_type.admin.inc
+files[] = views/micronews.views.inc
+files[] = views/micronews_handler_link_field.inc
+files[] = views/micronews_handler_delete_link_field.inc
+files[] = views/micronews_handler_edit_link_field.inc
+files[] = views/micronews_handler_model_operations_field.inc
+
+

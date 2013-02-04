@@ -1,0 +1,378 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the micro module.
+ */
+
+/**
+ * Implement hook_install().
+ */
+function micro_install() {
+  menu_rebuild();
+}
+
+/**
+ * Implements hook_uninstall()
+ */
+function micro_uninstall() {
+  $result = db_select('variable', 'v')
+    ->fields('v', array('name'))
+    ->condition('name', 'micro_%', 'LIKE')
+    ->execute();
+  foreach ($result as $row) {
+    variable_del($row->name);
+  }
+
+  drupal_set_message(t('Micro has been uninstalled.'));
+}
+
+/**
+ * Implement hook_schema().
+ */
+function micro_schema() {
+  $schema['micro'] = array(
+    'description' => 'Stores micro items.',
+    'fields' => array(
+      'mid' => array(
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => 'Primary Key: Micro item ID',
+      ),
+      'type' => array(
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'description' => 'The machine-readable name of this item\'s type.',
+      ),
+    ),
+    'indexes' => array('eid' => array('eid')),
+    'foreign keys' => array('micro_type' => array(
+      'table' => 'micro_type',
+      'columns' => array('type' => 'machine_name'),
+      ),
+    ),
+    'primary key' => array('mid'),
+  );
+
+  $schema['micro_type'] = array(
+    'description' => 'Stores information about all defined micro types.',
+    'fields' => array(
+      'mtid' => array(
+        'type' => 'serial',
+        'not null' => TRUE,
+        'description' => 'Primary Key: Unique micro type ID',
+      ),
+      'machine_name' => array(
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'description' => 'The machine-readable name of this micro type',
+      ),
+      'name' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => 'The human-readable name of this micro type',
+      ),
+      'disabled' => array(
+        'description' => 'A boolean indicating whether the node type is disabled.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'size' => 'tiny',
+      ),
+      'description' => array(
+        'description' => 'A brief description of this type.',
+        'type' => 'text',
+        'not null' => TRUE,
+        'size' => 'medium',
+        'translatable' => TRUE,
+      ),
+    ) + entity_exportable_schema_fields(),
+    'primary key' => array('mtid'),
+    'unique keys' => array('machine_name' => array('machine_name')),
+  );
+  return $schema;
+}
+
+/**
+ * Add in the exportable entity db columns as required by the entity API.
+ */
+function micro_update_7100() {
+  db_add_field('micro_type', 'status', array(
+    'type' => 'int',
+    'not null' => TRUE,
+    'default' => ENTITY_CUSTOM,
+    'size' => 'tiny',
+    'description' => 'The exportable status of the entity.',
+  ));
+  db_add_field('micro_type', 'module', array(
+    'description' => 'The name of the providing module if the entity has been defined in code.',
+    'type' => 'varchar',
+    'length' => 255,
+    'not null' => FALSE,
+  ));
+}
+
+/**
+ * If Entity Reference is enabled, create fields and migrate data from old eid and bundles properties. This is for the benefit of those using pre-first-release dev snapshots, and not guaranteed to work flawlessly.
+ */
+function micro_update_7101() {
+  $rows = db_select('micro_type', 'mt')
+    ->fields('mt')
+    ->execute();
+  $micro_types = array();
+  foreach ($rows as $row) {
+    $row->bundles = unserialize($row->bundles);
+    $micro_types[$row->machine_name] = $row;
+  }
+
+  $references = array();
+  foreach ($micro_types as $micro_type_name => $micro_type) {
+    if ($micro_type->entity == 'site') {
+      continue;
+    }
+    $references[$micro_type_name]['entity'] = $micro_type->entity;
+    $references[$micro_type_name]['bundles'] = $micro_type->bundles;
+  }
+  if (count($references) && !module_exists('entityreference')) {
+    throw new DrupalUpdateException(t('Entity Reference must be enabled for update to continue.'));
+  }
+
+  $field_info = field_info_fields();
+
+  foreach ($references as $micro_type_name => $reference) {
+    $field_name = 'field_micro_' . $micro_type_name . '_parent_eid';
+    if (!in_array($field_name, array_keys($field_info))) {
+      // Don't create if a field of this name already exists.
+      // Create field.
+      $field = array(
+        'field_name' => $field_name,
+        'type' => 'entityreference',
+        'settings' => array(
+          'target_type' => $reference['entity'],
+          'handler_settings' => array(
+            'target_bundles' => $reference['bundles'],
+          ),
+        ),
+      );
+      
+      field_create_field($field);
+      
+      $instance = array(
+        'field_name' => $field_name,
+        'entity_type' => 'micro',
+        'bundle' => $micro_type_name,
+        'required' => TRUE,
+        'widget' => array(
+          'type' => 'entityreference_autocomplete',
+        ),
+      );
+      
+      field_create_instance($instance);
+    }
+    
+    // Migrate data.
+    $query = new EntityFieldQuery();
+    $query->entityCondition('entity_type', 'micro')
+    ->entityCondition('bundle', $micro_type_name);
+
+    $result = $query->execute();
+
+    foreach($result['micro'] as $micro) {
+      $micro = micro_load($micro->mid);
+      $micro->{$field_name}[LANGUAGE_NONE][0]['target_id'] = $micro->eid;
+      field_attach_presave('micro', $micro);
+      field_attach_update('micro', $micro);
+    }
+  }
+}
+
+/**
+ * Enable micro_admin.
+ */
+function micro_update_7102() {
+  // Anybody using this module prior to this update will expect an admin UI.
+  module_enable(array('micro_admin'));
+}
+
+/**
+ * If Entity Reference is enabled, create fields and migrate data from old uid property. This is for the benefit of those using pre-first-release dev snapshots, and not guaranteed to work flawlessly.
+ */
+function micro_update_7103() {
+  $rows = db_select('micro_type', 'mt')
+    ->fields('mt')
+    ->execute();
+  $micro_types = array();
+  foreach ($rows as $row) {
+    $row->bundles = unserialize($row->bundles);
+    $micro_types[$row->machine_name] = $row;
+  }
+
+  if (!module_exists('entityreference')) {
+    throw new DrupalUpdateException(t('Entity Reference must be enabled for update to continue.'));
+  }
+
+  $field_info = field_info_fields();
+
+  foreach ($micro_types as $micro_type_name => $type) {
+    $field_name = 'field_micro_author';
+    if (!in_array($field_name, array_keys($field_info))) {
+      // Don't create if a field of this name already exists.
+      // Create field.
+      $field = array(
+        'field_name' => $field_name,
+        'type' => 'entityreference',
+        'settings' => array(
+          'target_type' => 'user',
+          'handler_settings' => array(
+            'target_bundles' => 'user',
+          ),
+        ),
+      );
+      
+      field_create_field($field);
+      
+      $instance = array(
+        'field_name' => $field_name,
+        'entity_type' => 'micro',
+        'bundle' => $micro_type_name,
+        'required' => TRUE,
+        'widget' => array(
+          'type' => 'entityreference_autocomplete',
+        ),
+        'micro' => array(
+          'is_author' => 1,
+        ),
+      );
+      
+      field_create_instance($instance);
+    }
+    
+    // Migrate data.
+    $query = new EntityFieldQuery();
+    $query->entityCondition('entity_type', 'micro')
+    ->entityCondition('bundle', $micro_type_name);
+
+    $result = $query->execute();
+
+    foreach($result['micro'] as $micro) {
+      $micro = micro_load($micro->mid);
+      $micro->{$field_name}[LANGUAGE_NONE][0]['target_id'] = $micro->uid;
+      field_attach_presave('micro', $micro);
+      field_attach_update('micro', $micro);
+    }
+  }
+}
+
+/**
+ * If Date is enabled, create fields and migrate data from old created property. This is for the benefit of those using pre-first-release dev snapshots, and not guaranteed to work flawlessly.
+ */
+function micro_update_7104() {
+  $rows = db_select('micro_type', 'mt')
+    ->fields('mt')
+    ->execute();
+  $micro_types = array();
+  foreach ($rows as $row) {
+    $row->bundles = unserialize($row->bundles);
+    $micro_types[$row->machine_name] = $row;
+  }
+
+  if (!module_exists('date')) {
+    throw new DrupalUpdateException(t('Entity Reference must be enabled for update to continue.'));
+  }
+
+  $field_info = field_info_fields();
+
+  foreach ($micro_types as $micro_type_name => $type) {
+    $field_name = 'field_micro_created';
+    if (!in_array($field_name, array_keys($field_info))) {
+      // Don't create if a field of this name already exists.
+      // Create field.
+      $field = array(
+        'field_name' => $field_name,
+        'type' => 'datestamp',
+        'settings' => array(
+          'granularity' => array(
+            'month' => 'month',
+            'day' => 'day',
+            'hour' => 'hour',
+            'minute' => 'minute',
+            'second' => 'second',
+            'year' => 'year',
+          ),
+          'tz_handling' => 'site',
+          'timezone_db' => 'UTC',
+          'cache_enabled' => 1,
+          'cache_count' => '1',
+          'todate' => '',
+        ),
+      );
+      
+      field_create_field($field);
+      
+      $instance = array(
+        'field_name' => $field_name,
+        'entity_type' => 'micro',
+        'bundle' => $micro_type_name,
+        'required' => TRUE,
+        'widget' => array(
+          'type' => 'date_text',
+          'settings' => array(
+            'input_format' => 'U',
+          ),
+        ),
+        'settings' => array(
+          'default_value' => 'now',
+        ),
+        'display' => array(
+          'default' => array(
+            'type' => 'hidden',
+          ),
+        ),
+        'micro' => array(
+          'is_created' => 1,
+        ),
+      );
+      
+      field_create_instance($instance);
+    }
+    
+    // Migrate data.
+    $query = new EntityFieldQuery();
+    $query->entityCondition('entity_type', 'micro')
+    ->entityCondition('bundle', $micro_type_name);
+
+    $result = $query->execute();
+
+    foreach($result['micro'] as $micro) {
+      $micro = micro_load($micro->mid);
+      $micro->{$field_name}[LANGUAGE_NONE][0]['value'] = $micro->created;
+      field_attach_presave('micro', $micro);
+      field_attach_update('micro', $micro);
+    }
+  }
+}
+
+/**
+ * Remove obsolete db fields.
+ */
+function micro_update_7105() {
+  // Remove eid, uid, created from micro.
+  db_drop_field('micro', 'eid');
+  db_drop_field('micro', 'uid');
+  db_drop_field('micro', 'created');
+  // Remove 'entity' and 'bundles' from micro_type.
+  db_drop_field('micro_type', 'entity');
+  db_drop_field('micro_type', 'bundles');
+}
+
+/**
+ * 
+ */
+//function micro_update_N() {
+  // TODO: Clear menu cache;
+//}

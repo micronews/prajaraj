@@ -1,0 +1,121 @@
+<?php 
+
+// // function model(){
+// // 	ctools_include('ajax');
+// // 	ctools_include('modal');
+// // 	ctools_modal_add_js();
+
+// // 	$output = ctools_modal_text_button(t('Add Area'), 'admin/structure/docks/aform/'.$id, t('Pop me up'));
+// // 	$output .= '<div id="modal-message">&nbsp</div>';
+// // 	ctools_include('plugins');
+
+// // 	print ajax_render($output);
+
+// // 	exit;
+// // }
+
+// function ajax_myform() {
+
+// $form['#attributes'] = array('id' => 'myform');
+// $form['submsg'] = array(
+// '#type' => 'markup',
+//     '#prefix' => '<div id="box">',
+//     '#suffix' => '</div>',
+//     '#markup' => '<h1></h1>',
+//   );
+
+  
+// $form['username'] = array(
+// '#title' => t('Name'),
+// '#type' => 'textfield',
+// '#default_value' => '',
+// '#maxlength' => '128',
+// '#required' => TRUE,
+
+// );
+
+// $form['emailid'] = array(
+// '#title' => t('Email'),
+// '#type' => 'textfield',
+// '#default_value' => '',
+// '#maxlength' => '128',
+// '#required' => TRUE,
+
+// );
+
+// $form['message'] = array(
+// '#title' => t('Mese'),
+// '#type' => 'textarea',
+// '#default_value' => '',
+
+// '#required' => TRUE,
+
+// );
+
+// $form['submit'] = array(
+// '#type' => 'submit',
+//     '#ajax' => array(
+//       'callback' => 'submit_driven_callback',
+// 	  'wrapper' => 'myform',
+//       'method' => 'replace',
+//       //'effect' => 'fade',
+//     ),
+//     '#value' => t('Submit'),
+//   );
+
+
+// return $form;
+
+// }
+
+
+// function modal_form($js=null) {
+//   //echo arg(2);
+// 	ctools_include('modal');
+// 	ctools_include('ajax');
+// 	$form_state = array(
+// 		'title' => t('Add Area'),
+// 		'ajax' => TRUE,
+// 	);
+	
+// 	$output = ctools_modal_form_wrapper('myform', $form_state);
+	
+// 	if (!empty($form_state['executed'])) {
+// 		// We'll just overwrite the form output if it was successful.
+// 		$output = array();		
+// 		$output[] = ctools_modal_command_display(t('Action Success'), '<div class="modal-message">Done!</div>');
+// 	}
+	
+// 	print ajax_render($output);
+// 	exit;
+// }
+
+// function mymodule_menu(){
+// 	$items['admin/test'] = array(
+// 		'title' => 'M',
+// 		'page callback' => 'modal_form',
+// 		'access arguments' => 'administer site configuration',
+// 	);
+// 	$items['blah'] = array(
+// 		'title' => 'M',
+// 		'page callback' => 'bg',
+// 		'access arguments' => 'administer site configuration',
+// 	);
+// 	return $items;
+// }
+
+// function bg(){
+
+// 	ctools_include('modal');
+// 	ctools_include('ajax');
+
+// 	ctools_modal_add_js();
+
+// 	//$output = '<div id="modal-message">&nbsp</div>';
+// 	$output = ctools_modal_text_button(t('Add Area'), 'admin/test', t('Pop me up'));
+// 	return $output;
+	
+// 	// ctools_include('plugins');
+	
+// 	// echo ajax_render($output);
+// }

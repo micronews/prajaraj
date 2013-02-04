@@ -1,0 +1,2683 @@
+<?php
+
+/**
+ * @file
+ * Micro entity that attaches to other entities (or site)
+ */
+
+/**
+ * Modules should return this value from hook_micro_access() to allow access to a micro.
+ */
+define('MICRO_ACCESS_ALLOW', 'allow');
+
+/**
+ * Modules should return this value from hook_micro_access() to deny access to a micro.
+ */
+define('MICRO_ACCESS_DENY', 'deny');
+
+/**
+ * Modules should return this value from hook_micro_access() to not affect micro access.
+ */
+define('MICRO_ACCESS_IGNORE', NULL);
+
+/**
+ * Defining the admin path.
+ */
+define('MICRO_ADMIN_PATH', 'admin/structure/micro');
+
+
+//=============
+//DRUPAL HOOKS.
+//=============
+
+/**
+ * Implements hook_init().
+ */
+function micro_init() {
+  $path = drupal_get_path('module', 'micro');
+  include_once $path .'/includes/micro.token.inc';
+  if (module_exists('trigger')) {
+    include_once $path .'/includes/micro.actions.inc';
+  }
+  if (module_exists('og')) {
+    include_once $path .'/includes/micro.og.inc';
+  }
+}
+
+/**
+ * Implementation of hook_help().
+ */
+function micro_help($path, $arg) {
+  if ($path == 'admin/help#micro') {
+    return t('Provides a new micro entity that can be attached to other entities.');
+  }
+}
+
+/**
+ * Implements hook_menu().
+ */
+function micro_menu() {
+  $items['micro'] = array(
+    'page callback' => 'micro_page_default',
+    'access arguments' => array('access micro items'),
+    // Required to make 'micro/add' appear on the top-level of 'navigation' menu.
+    'menu_name' => '',
+    'type' => MENU_CALLBACK,
+  );
+  $items['micro/add'] = array(
+    'title' => 'Add micro item',
+    'page callback' => 'micro_add_page',
+    'access callback' => '_micro_add_access',
+    'menu_name' => 'navigation',
+    'theme callback' => '_micro_custom_theme',
+    'file' => 'micro.pages.inc',
+  );
+  drupal_static_reset('_micro_types_build');
+  foreach (micro_type_get_types() as $type) {
+    $type_url_str = str_replace('_', '-', $type->machine_name);
+    $items['micro/add/' . $type_url_str] = array(
+      'title' => $type->name,
+      'title callback' => 'check_plain',
+      'page callback' => 'micro_add',
+      'page arguments' => array($type->machine_name, 3),
+      'access callback' => 'micro_access',
+      'access arguments' => array('create', $type->machine_name),
+      'description' => $type->description,
+      'file' => 'micro.pages.inc',
+    );
+  }
+  $items['micro/%micro'] = array(
+    'title callback' => 'micro_label',
+    'title arguments' => array(1),
+    // The page callback also invokes drupal_set_title() in case
+    // the menu router's title is overridden by a menu link.
+    'page callback' => 'micro_page_view',
+    'page arguments' => array(1),
+    'access callback' => 'micro_access',
+    'access arguments' => array('view', 1),
+  );
+  $items['micro/%micro/view'] = array(
+    'title' => 'View',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => -10,
+  );
+  $items['micro/%micro/edit'] = array(
+    'title' => 'Edit',
+    'page callback' => 'micro_page_edit',
+    'page arguments' => array(1),
+    'access callback' => 'micro_access',
+    'access arguments' => array('update', 1),
+    'theme callback' => '_micro_custom_theme',
+    'weight' => 0,
+    'type' => MENU_LOCAL_TASK,
+    'context' => MENU_CONTEXT_PAGE | MENU_CONTEXT_INLINE,
+    'file' => 'micro.pages.inc',
+  );
+  $items['micro/%micro/delete'] = array(
+    'title' => 'Delete',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('micro_delete_confirm', 1),
+    'access callback' => 'micro_access',
+    'access arguments' => array('delete', 1),
+    'theme callback' => '_micro_custom_theme',
+    'weight' => 1,
+    'type' => MENU_LOCAL_TASK,
+    'context' => MENU_CONTEXT_INLINE,
+    'file' => 'micro.pages.inc',
+  );
+
+  $items['micro/ajax/add'] = array(
+    'page callback' => 'micro_ajax_input',
+    'type' => MENU_CALLBACK,
+  );
+  $items['micro/ajax/edit/%/%micro'] = array(
+    'page callback' => 'micro_ajax_edit',
+    'page arguments' => array(3, 4),
+    'access callback' => 'user_access',
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+  );
+  $items['micro/ajax/add/%/%micro_type/%/%'] = array(
+    'page callback' => 'micro_ajax_input',
+    'page arguments' => array(3, 4, 5, 6),
+    'access callback' => 'user_access',
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+  );
+  $items['micro/ajax/flag/%/%micro_type/%/%'] = array(
+    'page callback' => 'micro_ajax_flag',
+    'page arguments' => array(3, 4, 5, 6, 7),
+    'access callback' => 'user_access',
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+  );
+  /*
+   *$items['micro/ajax/add/%/%micro_type/%'] = array(
+   *  'page callback' => 'micro_ajax_add',
+   *  'page arguments' => array(3,4,5),
+   *  'access callback' => 'micro_access',
+   *  'access arguments' => array('access content'),
+   *  'type' => MENU_CALLBACK,
+   *);
+   */
+  /*
+   *$items['micro/ajax/add/ajax/%micro_type/%'] = array(
+   *  'page callback' => 'micro_ajax_add',
+   *  'page arguments' => array(TRUE, 4, 5),
+   *  'access callback' => 'micro_access',
+   *  'access arguments' => array('access content'),
+   *  'type' => MENU_CALLBACK,
+   *);
+   */
+  
+  return $items;
+}
+
+/**
+ * Implements hook_menu_local_tasks_alter().
+ */
+function micro_menu_get_item_alter(&$router_item, $path, $original_map){
+  // Only alter callback for current page where something's been loaded.
+  if ($path != current_path() || empty($router_item['load_functions']) || empty($router_item['page_arguments'])) {
+    return;
+  }
+
+  $map = $original_map;
+  foreach (unserialize($router_item['load_functions']) as $key => $load_function) {
+    // TODO: Sometimes the load function callback is an array. What's with that?
+    if (is_string($load_function)) {
+      $map[$key] = $load_function($map[$key]);
+    }
+  }
+  $page_arguments = menu_unserialize($router_item['page_arguments'], $map);
+  
+  // Extract likely entity as in micro_menu_local_tasks_alter() below.
+  $entity = NULL;
+  foreach ($page_arguments as $page_argument) {
+    if (is_object($page_argument) && !empty($page_argument->micro['backreferences']) && !empty($page_argument->micro['backreferences']['paths']) && in_array(current_path(), $page_argument->micro['backreferences']['paths'])) {
+      $entity = $page_argument;
+      break;
+    }
+  }
+  if (!$entity) {
+    return;
+  }
+
+  $router_item['page_callback'] = 'micro_entityreference_backreferences_page_view';
+  $map_count = count($original_map);
+  $page_arguments = unserialize($router_item['page_arguments']);
+  // Add micro type and field name to arguments.
+  $page_arguments[] = $map_count - 2;
+  $page_arguments[] = $map_count - 1;
+  $router_item['page_arguments'] = serialize($page_arguments);
+}
+
+/**
+ * Implements hook_menu_local_tasks_alter().
+ */
+function micro_menu_local_tasks_alter(&$data, $router_item, $root_path) {
+  if (!module_exists('entityreference')) {
+    return;
+  }
+
+  // Assume the first entity we find in the page arguments for the tab
+  // root is the one that this page is "about".
+  $root = menu_get_item($router_item['tab_root_href']);
+  $entity = NULL;
+  foreach ($root['page_arguments'] as $page_argument) {
+    if (is_object($page_argument) && !empty($page_argument->micro['backreferences'])) {
+      $entity = $page_argument;
+      break;
+    }
+  }
+  if (!$entity) {
+    return;
+  }
+  
+  foreach ($entity->micro['backreferences'] as $micro_type => $fields) {
+    foreach ($fields as $field_name => $settings) {
+      if (!empty($settings['page']['display_tab'])) {
+        $new_tab = array(
+          '#theme' => 'menu_local_task',
+          '#link' => array(
+            'title' => $entity->micro['backreferences'][$micro_type][$field_name]['label'],
+            'href' => $entity->micro['backreferences'][$micro_type][$field_name]['page']['path'],
+            'localized_options' => array(),
+          ),
+        );
+        
+        if ($new_tab['#link']['href'] == current_path()) {
+          foreach ($data['tabs'][0]['output'] as $key => $tab) {
+            if (!empty($tab['#active'])) {
+              unset($data['tabs'][0]['output'][$key]['#active']);
+            }
+            if (!empty($data['tabs'][0]['output'][$key]['#link']['localized_options']['attributes']['class'])) {
+              foreach ($data['tabs'][0]['output'][$key]['#link']['localized_options']['attributes']['class'] as $c_key => $class) {
+                if ($class == 'active') {
+                  unset($data['tabs'][0]['output'][$key]['#link']['localized_options']['attributes']['class'][$c_key]);
+                }
+              }
+            }
+          }
+          $new_tab['#active'] = TRUE;
+          
+          // 'Add' action.
+          if (micro_access('create', $micro_type)) {
+            $field_info = field_info_field($field_name);
+            list($eid, $rid, $bundle) = entity_extract_ids($field_info['settings']['target_type'], $entity);
+  
+            $data['actions']['output'][] = array(
+              '#theme' => 'menu_local_action',
+              '#link' => array(
+                'title' => t('Add !type_name', array('!type_name' => micro_type_get_name($micro_type))),
+                'href' => 'micro/add/' . $micro_type,
+                'localized_options' => array(
+                  'query' => array(
+                    'destination' => current_path(),
+                    'micro[' . $field_name . ']' => $eid,
+                  ),
+                ),
+              ),
+            );
+          }
+        }
+        $data['tabs'][0]['output'][] = $new_tab;
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_entity_load().
+ */
+function micro_entity_load($entities, $type) {
+  foreach ($entities as $entity) {
+    $uri = entity_uri($type, $entity);
+    // Assuming entity URI path is always tab root. Dangerous?
+    if (strpos(current_path(), $uri['path']) === 0) {
+      list($id, $vid, $bundle) = entity_extract_ids($type, $entity);
+      $entity->micro['backreferences'] = micro_entityreference_bundle_backreferences($type, $bundle);
+    
+      if (!empty($entity->micro['backreferences'])) {
+        foreach ($entity->micro['backreferences'] as $micro_type => $fields) {
+          foreach ($fields as $field_name => $settings) {
+            $entity->micro['backreferences'][$micro_type][$field_name]['page']['path'] = $uri['path'] . '/micro/' . $micro_type . '/' . $field_name;
+            $entity->micro['backreferences']['paths'][] = $uri['path'] . '/micro/' . $micro_type . '/' . $field_name;
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function micro_theme() {
+  return array(
+    'micro' => array(
+      'template' => 'micro',
+      'render element' => 'elements',
+    ),
+    'micro_add_list' => array(
+      'variables' => array('content' => NULL), 
+      'file' => 'micro.pages.inc',
+    ), 
+    'micro_admin_type' => array(
+      'variables' => array('name' => NULL, 'type' => NULL),
+    ),
+    'micro_admin_overview' => array(
+      'variables' => array('name' => NULL, 'type' => NULL),
+    ),
+    'micro_wrapper' => array(
+      'template' => 'micro-wrapper',
+      'render element' => 'content',
+    ),
+    'micro_linked_page_input' => array(
+      'render element' => 'elements',
+    ),
+    'micro_ajax_form_input' => array(
+      'render element' => 'elements',
+    ),
+    'micro_inline_form_input' => array(
+      'render element' => 'elements',
+    ),
+    'micro_ajax_flag' => array(
+      'render element' => 'elements',
+    ),
+    'micro_ajax_edit' => array(
+      'variables' => array('mid' => NULL),
+    ),
+  );
+}
+
+/**
+ * Implements hook_permission().
+ */
+function micro_permission() {
+  $permissions = array(
+    'bypass micro access' =>  array(
+      'title' => t('Bypass micro access'),
+      'description' => t('Bypass all access permissions for micro items.'),
+    ),
+    'access micro items' =>  array(
+      'title' => t('Access micro items'),
+      'description' => t('Access micro items.'),
+    ),
+    'administer micro items' =>  array(
+      'title' => t('Administer micro items'),
+      'description' => t('Edit and view all micro items.'),
+    ),
+  );
+
+  // Generate standard micro permissions for all applicable micro types.
+  foreach (micro_permissions_get_configured_types() as $type) {
+    $permissions += micro_list_permissions($type);
+  }
+
+  return $permissions;
+}
+
+/**
+ * Implements hook_block_info().
+ */
+function micro_block_info() {
+  $blocks = array();
+  $micro_field_info_instances = field_info_instances('micro');
+  foreach (micro_entityreference_backreferences() as $entity_type => $micro_settings) {
+    $entity_type_info = entity_get_info($entity_type);
+    foreach($micro_settings as $micro_type => $micro_type_config) {
+      foreach($micro_type_config as $field_name => $field_config) {
+        foreach ($field_config['bundles'] as $bundle) {
+          if (!empty($field_config['settings']['block']['display'])) {
+            $blocks['micro__' . $micro_type . '__' . $field_name] = array(
+              'info' => t('!micro_type micro backreferences to !entity_type via !field_name.', array('!micro_type' => micro_type_get_name($micro_type), '!entity_type' => $entity_type_info['label'], '!field_name' => $micro_field_info_instances[$micro_type][$field_name]['label'])),
+            );
+          }
+        }
+      }
+    }
+  }
+
+  return $blocks;
+}
+
+/**
+ * Implements hook_field_extra_fields().
+ */
+function micro_block_view($delta = '') {
+  list(, $micro_type, $field_name) = explode('__', $delta);
+  $field_info = field_info_field($field_name);
+
+  $menu_item = menu_get_item();
+  $entity = NULL;
+  $target_entity_info = entity_get_info($field_info['settings']['target_type']);
+  foreach ($menu_item['page_arguments'] as $page_argument) {
+    if (is_object($page_argument) && !empty($page_argument->micro['backreferences'])) {
+      // Make an attempt to see if we should be trying to display this block in the context of this entity.
+      foreach ($target_entity_info['entity keys'] as $key => $property) {
+        if (!empty($property) && !property_exists($page_argument, $property)) {
+          continue(2);
+        }
+      }
+      if (!empty($target_entity_info['bundle keys'])) {
+        foreach ($target_entity_info['bundle keys'] as $key => $property) {
+          if (!empty($property) && !property_exists($page_argument, $property)) {
+            continue(2);
+          }
+        }
+      }
+      
+      list($eid, $rid, $bundle) = entity_extract_ids($field_info['settings']['target_type'], $page_argument);
+      if (!empty($eid) && !empty($bundle)) {
+        $entity = $page_argument;
+        break;
+      }
+    }
+  }
+  if (!$entity) {
+    return;
+  }
+
+  $field_info_instance = field_info_instance('micro', $field_name, $micro_type);
+  
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'micro')
+    ->propertyCondition('type', array($micro_type))
+    ->fieldCondition($field_name, 'target_id', $eid, '=')
+    ->propertyOrderBy('mid', 'DESC')
+    ->pager(10);
+  $result = $query->execute();
+  
+  if (empty($result['micro'])) {
+    return;
+  }
+  
+  $micros = micro_load_multiple(array_keys($result['micro']));
+  
+  $block = array();
+  $block['subject'] = $field_info_instance['micro']['label'];
+  $block['content'] = array(
+    '#theme' => 'item_list',
+    '#items' => array(),
+  );
+  
+  foreach ($micros as $micro) {
+    $micro_uri = micro_uri($micro);
+    $block['content']['#items'][] = l(micro_label($micro), $micro_uri['path']);
+  }
+
+  return $block;
+}
+
+/**
+ * Implements hook_field_extra_fields().
+ */
+function micro_field_extra_fields() {
+  $extra = array();
+  foreach (micro_entityreference_backreferences() as $entity_type => $micro_settings) {
+    foreach($micro_settings as $micro_type => $micro_type_config) {
+      foreach($micro_type_config as $field_name => $field_config) {
+        foreach ($field_config['bundles'] as $bundle) {
+          if (!empty($field_config['settings']['page']['display']) && !empty($field_config['settings']['page']['display_field_link'])) {
+            $extra[$entity_type][$bundle]['display']['micro_field__' . $micro_type . '__' . $field_name] = array(
+                'label' => $field_config['settings']['label'], 
+                'description' => t('Link to list of %micro_type micros that reference this %entity_type in the %field_name field.', array('%micro_type' => $micro_type, '%entity_type' => $entity_type, '%field_name' => $field_name)), 
+                'weight' => 0,
+            );
+          }
+          if (!empty($field_config['settings']['block']['display']) && !empty($field_config['settings']['block']['display_field'])) {
+            $extra[$entity_type][$bundle]['display']['micro_block__' . $micro_type . '__' . $field_name] = array(
+                'label' => $field_config['settings']['label'], 
+                'description' => t('Block list of %micro_type micros that reference this %entity_type in the %field_name field.', array('%micro_type' => $micro_type, '%entity_type' => $entity_type, '%field_name' => $field_name)), 
+                'weight' => 0,
+            );
+          }
+        }
+      }
+    }
+  }
+  return $extra;
+}
+
+/**
+ * Implements hook_entity_view_alter().
+ */
+function micro_entity_view_alter(&$build, $type) {
+  // Assuming the entity is the sole object in the build array. Dangerous?
+  foreach ($build as $element) {
+    if (is_object($element) && property_exists($element, 'micro')) {
+      $entity = $element;
+      break;
+    }
+  }
+  if (empty($entity)) {
+    return;
+  }
+  
+  list($eid, $rid, $bundle) = entity_extract_ids($type, $entity);
+  $uri = entity_uri($type, $entity);
+
+  foreach (micro_entityreference_bundle_backreferences($type, $build['#bundle']) as $micro_type => $field) {
+    foreach ($field as $field_name => $settings) {
+      if (!empty($settings['page']['display_field_link'])) {
+        $build['micro_field__' . $micro_type . '__' . $field_name] = array(
+          '#type' => 'container',
+          '#attributes' => array(
+            'class' => array(drupal_html_class('micro--' . $micro_type . '--' . $field_name)),
+          ),
+          'link' => array(
+            '#type' => 'link',
+            '#title' => $settings['label'],
+            '#href' => $uri['path'] . '/micro/' . $micro_type . '/' . $field_name,
+          ),
+        );
+      }
+ 
+      if (!empty($settings['block']['display']) && !empty($settings['block']['display_field'])) {
+        $block = (object) module_invoke('micro', 'block_view', 'micro__' . $micro_type . '__' . $field_name);
+        $block->region = 'content';
+        $block->module = 'micro';
+        $block->delta = 'micro__' . $micro_type . '__' . $field_name;
+        $build['micro_block__' . $micro_type . '__' . $field_name] = $block->content;
+        unset($block->content);
+        $build['micro_block__' . $micro_type . '__' . $field_name]['#block'] = $block;
+        $build['micro_block__' . $micro_type . '__' . $field_name]['#theme_wrappers'] = array('block');
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_user_cancel().
+ */
+function micro_user_cancel(&$edit, $account, $method) {
+  // Delete all micro items of the user in any case.
+  foreach (micro_load_by_user($account) as $micro) {
+    micro_delete($micro);
+  }
+}
+/**
+ * Implements hook_forms().
+ * All micro forms share the same form handler.
+ */
+function micro_forms() {
+  $forms = array();
+  if ($types = micro_type_get_types()) {
+    foreach (array_keys($types) as $type) {
+      $forms[$type . '_micro_form']['callback'] = 'micro_form';
+    }
+  }
+  return $forms;
+}
+
+/**
+ * Implements hook_entity_info()
+ */
+function micro_entity_info() {
+  $return = array(
+    'micro' => array(
+      'label' => t('Micro'),
+      'entity class' => 'Micro',
+      'controller class' => 'MicroController',
+      'base table' => 'micro',
+      'uri callback' => 'micro_uri',
+      'label callback' => 'micro_label',
+      'fieldable' => TRUE,
+      'view modes' => array(
+        'small' => array(
+          'label' => t('Small view'),
+        ),
+        'full' => array(
+          'label' => t('Page view'),
+        ),
+      ),
+      'entity keys' => array(
+        'id' => 'mid',
+        'bundle' => 'type',
+        'label' => 'mid',
+      ),
+      'bundles' => array(),
+      'bundle keys' => array(
+        'bundle' => 'machine_name',
+      ),
+    ),
+  );
+
+  $return['micro_type'] = array(
+    'label' => t('Micro type'),
+    'entity class' => 'MicroType',
+    'controller class' => 'EntityAPIControllerExportable',
+    'base table' => 'micro_type',
+    'fieldable' => FALSE,
+    'bundle of' => 'micro',
+    'exportable' => TRUE,
+    'entity keys' => array(
+      'id' => 'mtid',
+      'name' => 'machine_name',
+      'label' => 'name',
+    ),
+  );
+
+  if (module_exists('search')) {
+    $return['micro']['view modes'] += array(
+      'search_index' => array(
+        'label' => t('Search index'),
+        'custom settings' => FALSE,
+      ),
+      'search_result' => array(
+        'label' => t('Search result'),
+        'custom settings' => FALSE,
+      ),
+    );
+  }
+
+  return $return;
+}
+
+/**
+ * Implements hook_entity_info_alter().
+ */
+function micro_entity_info_alter(&$entity_info) {
+  $types = db_select('micro_type', 't')
+    ->fields('t')
+    ->execute()
+    ->fetchAllAssoc('mtid');
+
+  foreach ($types as $tid => $info) {
+    $entity_info['micro']['bundles'][$info->machine_name] = array(
+      'label' => $info->name,
+      'admin' => array(
+        'path' => 'admin/structure/micro/manage/%micro_type',
+        'real path' => 'admin/structure/micro/manage/' . str_replace('_', '-', $info->machine_name),
+        'bundle argument' => 4,
+        'access arguments' => array('administer micro types'),
+      ),
+    );
+  }
+}
+
+/**
+ * Implements hook_entity_property_info().
+ */
+function micro_entity_property_info() {
+  $info = array();
+  // Add meta-data about the basic properties.
+  $properties = &$info['micro']['properties'];
+
+  $properties['type'] = array(
+    'setter callback' => 'entity_property_verbatim_set',
+    'setter permission' => 'administer micro items',
+    'required' => TRUE,
+  );
+  return $info;
+}
+
+
+/**
+ * Controller class for micro items.
+ *
+ * This extends the EntityAPIController class.
+ */
+class MicroController extends EntityAPIController {
+}
+
+/**
+ * The class used for micro entities.
+ */
+class Micro extends EntityDBExtendable {
+
+  public function __construct($values = array()) {
+    parent::__construct($values, 'micro');
+  }
+}
+
+/**
+ * Use a separate class for micro types so we can specify some defaults
+ * modules may alter.
+ */
+
+class MicroType extends EntityDBExtendable {
+  public $name;
+
+  public function __construct($values = array()) {
+    parent::__construct($values, 'micro_type');
+  }
+
+  /**
+   * Returns whether the micro type is locked, thus may not be deleted or renamed.
+   *
+   * Micro types provided in code are automatically treated as locked, as well
+   * as any fixed micro type.
+   */
+
+  public function isLocked() {
+    return isset($this->disabled) && (($this->disabled & ENTITY_IN_CODE) || ($this->disabled & ENTITY_FIXED));
+  }
+}
+
+/**
+ * Implements hook_field_display_ENTITY_TYPE_alter().
+ */
+function micro_field_display_micro_alter(&$display, $context) {
+  // Hide field labels in search index.
+  if ($context['view_mode'] == 'search_index') {
+    $display['label'] = 'hidden';
+  }
+}
+
+/**
+ * Gather the rankings from the the hook_ranking implementations.
+ *
+ * @param $query
+ *   A query object that has been extended with the Search DB Extender.
+ */
+function _micro_rankings(SelectQueryExtender $query) {
+  if ($ranking = module_invoke_all('ranking')) {
+    $tables = &$query->getTables();
+    foreach ($ranking as $rank => $values) {
+      if ($micro_rank = variable_get('micro_rank_' . $rank, 0)) {
+        // If the table defined in the ranking isn't already joined, then add it.
+        if (isset($values['join']) && !isset($tables[$values['join']['alias']])) {
+          $query->addJoin($values['join']['type'], $values['join']['table'], $values['join']['alias'], $values['join']['on']);
+        }
+        $arguments = isset($values['arguments']) ? $values['arguments'] : array();
+        $query->addScore($values['score'], $arguments, $micro_rank);
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_search_info().
+ */
+function micro_search_info() {
+  return array(
+    'title' => 'Content',
+    'path' => 'micro',
+  );
+}
+
+/**
+ * Implements hook_search_access().
+ */
+function micro_search_access() {
+  return user_access('access micro items');
+}
+
+/**
+ * Implements hook_search_reset().
+ */
+function micro_search_reset() {
+  db_update('search_dataset')
+    ->fields(array('reindex' => REQUEST_TIME))
+    ->condition('type', 'micro')
+    ->execute();
+}
+
+/**
+ * Implements hook_search_status().
+ */
+function micro_search_status() {
+  $total = db_query('SELECT COUNT(*) FROM {micro}')->fetchField();
+  $remaining = db_query("SELECT COUNT(*) FROM {micro} m LEFT JOIN {search_dataset} d ON d.type = 'micro' AND d.sid = m.mid WHERE d.sid IS NULL OR d.reindex <> 0")->fetchField();
+  return array('remaining' => $remaining, 'total' => $total);
+}
+
+/**
+ * Implements hook_search_admin().
+ */
+function micro_search_admin() {
+  // Output form for defining rank factor weights.
+  $form['content_ranking'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Content ranking'),
+  );
+  $form['content_ranking']['#theme'] = 'micro_search_admin';
+  $form['content_ranking']['info'] = array(
+    '#value' => '<em>' . t('The following numbers control which properties the content search should favor when ordering the results. Higher numbers mean more influence, zero means the property is ignored. Changing these numbers does not require the search index to be rebuilt. Changes take effect immediately.') . '</em>'
+  );
+
+  // Note: reversed to reflect that higher number = higher ranking.
+  $options = drupal_map_assoc(range(0, 10));
+  foreach (module_invoke_all('ranking') as $var => $values) {
+    $form['content_ranking']['factors']['micro_rank_' . $var] = array(
+      '#title' => $values['title'],
+      '#type' => 'select',
+      '#options' => $options,
+      '#default_value' => variable_get('micro_rank_' . $var, 0),
+    );
+  }
+  return $form;
+}
+
+/**
+ * Implements hook_search_execute().
+ */
+function micro_search_execute($keys = NULL, $conditions = NULL) {
+  // Build matching conditions
+  $query = db_select('search_index', 'i', array('target' => 'slave'))->extend('SearchQuery')->extend('PagerDefault');
+  $query->join('micro', 'm', 'm.mid = i.sid');
+  $query
+    ->addTag('micro_access')
+    ->searchExpression($keys, 'micro');
+
+  // Insert special keywords.
+  $query->setOption('type', 'm.type');
+  /*
+   *if ($query->setOption('term', 'ti.tid')) {
+   *  $query->join('taxonomy_index', 'ti', 'm.mid = ti.mid');
+   *}
+   */
+  // Only continue if the first pass query matches.
+  if (!$query->executeFirstPass()) {
+    return array();
+  }
+
+  // Add the ranking expressions.
+  _micro_rankings($query);
+
+  // Load results.
+  $find = $query
+    ->limit(10)
+    ->execute();
+  $results = array();
+  foreach ($find as $item) {
+    // Render the micro.
+    $micro = micro_load($item->sid);
+    $build = micro_view($micro, 'search_result');
+    unset($build['#theme']);
+    $micro->rendered = drupal_render($build);
+
+    // Fetch comments for snippet.
+    $micro->rendered .= ' ' . module_invoke('comment', 'micro_update_index', $micro);
+
+    $extra = module_invoke_all('micro_search_result', $micro);
+
+    $uri = entity_uri('micro', $micro);
+    $results[] = array(
+      'link' => url($uri['path'], array_merge($uri['options'], array('absolute' => TRUE))),
+      'type' => check_plain(micro_type_get_name($micro)),
+      'title' => $micro->title,
+      'user' => theme('username', array('account' => user_load($micro->uid))),
+      'date' => $micro->changed,
+      'micro' => $micro,
+      'extra' => $extra,
+      'score' => $item->calculated_score,
+      'snippet' => search_excerpt($keys, $micro->rendered),
+    );
+  }
+  return $results;
+}
+
+/**
+ * Implements hook_ranking().
+ */
+function micro_ranking() {
+  // Create the ranking array and add the basic ranking options.
+  $ranking = array(
+    'relevance' => array(
+      'title' => t('Keyword relevance'),
+      // Average relevance values hover around 0.15
+      'score' => 'i.relevance',
+    ),
+  );
+
+  // Add relevance based on creation or changed date.
+  if ($micro_cron_last = variable_get('micro_cron_last', 0)) {
+    $ranking['recent'] = array(
+      'title' => t('Recently posted'),
+      // Exponential decay with half-life of 6 months, starting at last indexed micro
+      'score' => 'POW(2.0, (GREATEST(n.created, n.changed) - :micro_cron_last) * 6.43e-8)',
+      'arguments' => array(':micro_cron_last' => $micro_cron_last),
+    );
+  }
+  return $ranking;
+}
+
+/**
+ * Implements hook_update_index().
+ */
+function micro_update_index() {
+  $limit = (int)variable_get('search_cron_limit', 100);
+
+  $result = db_query_range("SELECT m.mid FROM {micro} m LEFT JOIN {search_dataset} d ON d.type = 'micro' AND d.sid = m.mid WHERE d.sid IS NULL OR d.reindex <> 0 ORDER BY d.reindex ASC, m.mid ASC", 0, $limit, array(), array('target' => 'slave'));
+
+  foreach ($result as $micro) {
+    _micro_index_micro($micro);
+  }
+}
+
+/**
+ * Index a single micro.
+ *
+ * @param $micro
+ *   The micro to index.
+ */
+function _micro_index_micro($micro) {
+  $micro = micro_load($micro->mid);
+
+  // Save the created time of the most recent indexed micro, for the search
+  // results half-life calculation.
+  variable_set('micro_cron_last', $micro->created);
+
+  // Render the micro.
+  $build = micro_view($micro, 'search_index');
+  unset($build['#theme']);
+  $micro->rendered = drupal_render($build);
+
+  $text = '<h1>' . check_plain($micro->mid) . '</h1>' . $micro->rendered;
+
+  // Fetch extra data normally not visible
+  $extra = module_invoke_all('micro_update_index', $micro);
+  foreach ($extra as $t) {
+    $text .= $t;
+  }
+
+  // Update index
+  search_index($micro->mid, 'micro', $text);
+}
+
+
+/**
+ * Implementation of hook_form_alter().
+ */
+function micro_form_alter(&$form, $form_state, $form_id) {
+  if (isset($_REQUEST['micro'])) {
+    micro_entityreference_prepopulate($form, $form_state);
+  }
+}
+
+/**
+ * Set the values prepopulated in the request.
+ */
+function micro_entityreference_prepopulate(&$form) {
+  $request = (array)$_REQUEST['micro'];
+
+  foreach($request as $field => $value) {
+    if (array_key_exists($field, $form) && !empty($form[$field][$form[$field]['#language']][0]['target_id'])) {
+      $field_info = field_info_field($field);
+
+      if (!empty($form[$field][$form[$field]['#language']][0]['target_id']['#autocomplete_path'])) {
+        $entity = entity_load($field_info['settings']['target_type'], array($value));
+        if (count($entity)) {
+          $entity = array_shift($entity);
+        }
+        else {
+          continue;
+        }
+        
+        $value = entity_label($field_info['settings']['target_type'], $entity) . ' (' . $value .')';
+      }
+
+      $form[$field][$form[$field]['#language']][0]['target_id']['#default_value'] = $value;
+    }
+  }
+
+  return $form;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function micro_form_search_form_alter(&$form, $form_state) {
+  if (isset($form['module']) && $form['module']['#value'] == 'micro' && user_access('use advanced search')) {
+    // Keyword boxes:
+    $form['advanced'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Advanced search'),
+      '#collapsible' => TRUE,
+      '#collapsed' => TRUE,
+      '#attributes' => array('class' => array('search-advanced')),
+    );
+    $form['advanced']['keywords'] = array(
+      '#prefix' => '<div class="criterion">',
+      '#suffix' => '</div>',
+    );
+    $form['advanced']['keywords']['or'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Containing any of the words'),
+      '#size' => 30,
+      '#maxlength' => 255,
+    );
+    $form['advanced']['keywords']['phrase'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Containing the phrase'),
+      '#size' => 30,
+      '#maxlength' => 255,
+    );
+    $form['advanced']['keywords']['negative'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Containing none of the words'),
+      '#size' => 30,
+      '#maxlength' => 255,
+    );
+
+    // micro types:
+    $types = array_map('check_plain', micro_type_get_names());
+    $form['advanced']['type'] = array(
+      '#type' => 'checkboxes',
+      '#title' => t('Only of the type(s)'),
+      '#prefix' => '<div class="criterion">',
+      '#suffix' => '</div>',
+      '#options' => $types,
+    );
+    $form['advanced']['submit'] = array(
+      '#type' => 'submit',
+      '#value' => t('Advanced search'),
+      '#prefix' => '<div class="action">',
+      '#suffix' => '</div>',
+      '#weight' => 100,
+    );
+
+    // Languages:
+    $language_options = array();
+    foreach (language_list('language') as $key => $entity) {
+      $language_options[$key] = $entity->name;
+    }
+    if (count($language_options) > 1) {
+      $form['advanced']['language'] = array(
+        '#type' => 'checkboxes',
+        '#title' => t('Languages'),
+        '#prefix' => '<div class="criterion">',
+        '#suffix' => '</div>',
+        '#options' => $language_options,
+      );
+    }
+
+    $form['#validate'][] = 'micro_search_validate';
+  }
+}
+
+/**
+ * Form API callback for the search form. Registered in micro_form_alter().
+ */
+function micro_search_validate($form, &$form_state) {
+  // Initialize using any existing basic search keywords.
+  $keys = $form_state['values']['processed_keys'];
+
+  // Insert extra restrictions into the search keywords string.
+  if (isset($form_state['values']['type']) && is_array($form_state['values']['type'])) {
+    // Retrieve selected types - Forms API sets the value of unselected
+    // checkboxes to 0.
+    $form_state['values']['type'] = array_filter($form_state['values']['type']);
+    if (count($form_state['values']['type'])) {
+      $keys = search_expression_insert($keys, 'type', implode(',', array_keys($form_state['values']['type'])));
+    }
+  }
+
+  if (isset($form_state['values']['term']) && is_array($form_state['values']['term']) && count($form_state['values']['term'])) {
+    $keys = search_expression_insert($keys, 'term', implode(',', $form_state['values']['term']));
+  }
+  if (isset($form_state['values']['language']) && is_array($form_state['values']['language']) && count($form_state['values']['language'])) {
+    $keys = search_expression_insert($keys, 'language', implode(',', array_filter($form_state['values']['language'])));
+  }
+  if ($form_state['values']['or'] != '') {
+    if (preg_match_all('/ ("[^"]+"|[^" ]+)/i', ' ' . $form_state['values']['or'], $matches)) {
+      $keys .= ' ' . implode(' OR ', $matches[1]);
+    }
+  }
+  if ($form_state['values']['negative'] != '') {
+    if (preg_match_all('/ ("[^"]+"|[^" ]+)/i', ' ' . $form_state['values']['negative'], $matches)) {
+      $keys .= ' -' . implode(' -', $matches[1]);
+    }
+  }
+  if ($form_state['values']['phrase'] != '') {
+    $keys .= ' "' . str_replace('"', ' ', $form_state['values']['phrase']) . '"';
+  }
+  if (!empty($keys)) {
+    form_set_value($form['basic']['processed_keys'], trim($keys), $form_state);
+  }
+}
+
+
+//==========
+//MICRO API.
+//==========
+
+/**
+ * Determine whether the current user may perform the given operation on the
+ * specified micro.
+ *
+ * @param $op
+ *   The operation to be performed on the micro. Possible values are:
+ *   - "view"
+ *   - "update"
+ *   - "delete"
+ *   - "create"
+ * @param $micro
+ *   The micro object on which the operation is to be performed, or micro type
+ *   for "create" operation.
+ * @param $account
+ *   Optional, a user object representing the user for whom the operation is to
+ *   be performed. Determines access for a user other than the current user.
+ * @return
+ *   TRUE if the operation may be performed, FALSE otherwise.
+ */
+function micro_access($op, $micro, $account = NULL) {
+  global $user;
+
+  $rights = &drupal_static(__FUNCTION__, array());
+
+  if (!$micro || !in_array($op, array('view', 'update', 'delete', 'create'), TRUE)) {
+    // If there was no micro to check against, or the $op was not one of the
+    // supported ones, we return access denied.
+    return FALSE;
+  }
+  // If no user object is supplied, the access check is for the current user.
+  if (empty($account)) {
+    $account = $user;
+  }
+
+  // $micro may be either an object or a micro type. Since micro types cannot be
+  // an integer, use either mid or type as the static cache id.
+
+  $cid = is_object($micro) ? $micro->mid : $micro;
+
+  // If we've already checked access for this micro, user and op, return from
+  // cache.
+  if (isset($rights[$account->uid][$cid][$op])) {
+    return $rights[$account->uid][$cid][$op];
+  }
+
+  if (user_access('bypass micro access', $account)) {
+    $rights[$account->uid][$cid][$op] = TRUE;
+    return TRUE;
+  }
+  if (!user_access('access micro items', $account)) {
+    $rights[$account->uid][$cid][$op] = FALSE;
+    return FALSE;
+  }
+
+  // We grant access to the micro if both of the following conditions are met:
+  // - No modules say to deny access.
+  // - At least one module says to grant access.
+  // If no module specified either allow or deny, we fall back to the defaults.
+  $access = module_invoke_all('micro_access', $micro, $op, $account);
+  if (in_array(MICRO_ACCESS_DENY, $access, TRUE)) {
+    $rights[$account->uid][$cid][$op] = FALSE;
+    return FALSE;
+  }
+  elseif (in_array(MICRO_ACCESS_ALLOW, $access, TRUE)) {
+    $rights[$account->uid][$cid][$op] = TRUE;
+    return TRUE;
+  }
+
+  return FALSE;
+}
+
+/**
+ * Create a new micro object.
+ *
+ * @param $values
+ *   An associative array with default values for the micro object.
+ * @return
+ *   A micro object.
+ */
+function micro_create(array $values) {
+  return new Micro($values);
+}
+
+/**
+ * Saves a micro to the database.
+ *
+ * @param $micro
+ *   The micro object.
+ */
+function micro_save(Micro $micro) {
+  if (!isset($micro->type)) {
+    $micro_type = micro_type_get_type($micro);
+    $micro->type = $micro_type->machine_name;
+  }
+  return $micro->save();
+}
+
+/**
+ * Load a micro object from the database.
+ *
+ * @param $mid
+ *   The micro ID.
+ * @param $conditions
+ *   An array of conditions on the {micro} table in the form 'field' => $value.
+ * @param $reset
+ *   Whether to reset the micro_load_multiple cache.
+ * @return
+ *   A fully-populated micro object.
+ */
+function micro_load($mid = NULL, $conditions = array(), $reset = FALSE) {
+  $mids = (isset($mid) ? array($mid) : array());
+  $micro = micro_load_multiple($mids, $conditions, $reset);
+  return $micro ? reset($micro) : FALSE;
+}
+
+/**
+ * Load micro entities from the database.
+ *
+ * This function should be used whenever you need to load more than one micro
+ * from the database. Micro items are loaded into memory and will not require
+ * database access if loaded again during the same page request.
+ *
+ * @see entity_load()
+ *
+ * @param $mids
+ *   An array of micro IDs.
+ * @param $conditions
+ *   An array of conditions on the {micro} table in the form 'field' => $value.
+ * @param $reset
+ *   Whether to reset the internal micro_load cache.
+ * @return
+ *   An array of micro objects indexed by mid.
+ */
+function micro_load_multiple($mids = array(), $conditions = array(), $reset = FALSE) {
+  return entity_load('micro', $mids, $conditions, $reset);
+}
+
+/**
+ * Fetch micro items by account.
+ *
+ * @param $account
+ *   The user account to load micro items for, or its uid.
+ * @param $type
+ *   To load a single micro, pass the type of the micro to load.
+ * @return
+ *   Either a single micro or an array of micro items keyed by micro type.
+ *
+ * @see micro_load_multiple()
+ */
+function micro_load_by_user($account, $type = NULL) {
+  // Use a separate query to determine all micro ids per user and cache them.
+  // That way we can look up micro items by id and benefit from the static cache
+  // of the entity loader.
+  $cache = drupal_static(__FUNCTION__, array());
+  $uid = is_object($account) ? $account->uid : $account;
+
+  if (!isset($cache[$uid])) {
+    if (empty($type)) {
+      $micro_items = micro_load_multiple(array(), array('uid' => $uid));
+      // Cache ids for further lookups.
+      $cache[$uid] = array();
+      foreach ($micro_items as $mid => $micro) {
+        $cache[$uid][$micro->type] = $mid;
+      }
+      return array_combine(array_keys($cache[$uid]), $micro_items);
+    }
+    $cache[$uid] = db_select('micro', 'm')
+      ->fields('m', array('type', 'mid'))
+      ->condition('uid', $uid)
+      ->execute()
+      ->fetchAllKeyed();
+  }
+  if (isset($type)) {
+    return isset($cache[$uid][$type]) ? micro_load($cache[$uid][$type]) : FALSE;
+  }
+  // Return an array containing micro items keyed by micro type.
+  return $cache[$uid] ? array_combine(array_keys($cache[$uid]), micro_load_multiple($cache[$uid])) : $cache[$uid];
+}
+
+/**
+ * Deletes a micro.
+ *
+ * @param $micro
+ *   A micro object.
+ */
+function micro_delete(Micro $micro) {
+  $micro->delete();
+}
+
+/**
+ * Delete multiple micro items.
+ *
+ * @param $mids
+ *   An array of micro IDs.
+ */
+function micro_delete_multiple(array $mids) {
+  entity_get_controller('micro')->delete($mids);
+}
+
+/**
+ * Determine whether a micro hook exists.
+ *
+ * @param $micro
+ *   A micro object or a string containing the micro type.
+ * @param $hook
+ *   A string containing the name of the hook.
+ * @return
+ *   TRUE if the $hook exists in the micro type of $micro.
+ */
+function micro_hook($micro, $hook) {
+  $base = micro_type_get_module($micro) . '_micro';
+  return module_hook($base, $hook);
+}
+
+/**
+ * Invoke a micro hook.
+ *
+ * @param $micro
+ *   A micro object or a string containing the micro type.
+ * @param $hook
+ *   A string containing the name of the hook.
+ * @param $a2, $a3, $a4
+ *   Arguments to pass on to the hook, after the $micro argument.
+ * @return
+ *   The returned value of the invoked hook.
+ */
+function micro_invoke($micro, $hook, $a2 = NULL, $a3 = NULL, $a4 = NULL) {
+  if (micro_hook($micro, $hook)) {
+    $base = micro_type_get_module($micro) . '_micro';
+    $function = $base . '_' . $hook;
+    return ($function($micro, $a2, $a3, $a4));
+  }
+}
+
+/**
+ * Prepares a micro object for editing.
+ *
+ * Fills in a few default values, and then invokes hook_prepare() on the micro
+ * type module, and hook_micro_prepare() on all modules.
+ *
+ * @param $micro
+ *   A micro object.
+ */
+function micro_object_prepare($micro) {
+  // If this is a new micro, fill in the default values.
+  // TODO: Delete this.
+  if (!isset($micro->mid) || isset($micro->is_new)) {
+    global $user;
+    $micro->uid = $user->uid;
+    $micro->created = REQUEST_TIME;
+  }
+  elseif (property_exists($micro, 'created')) {
+    $micro->date = format_date($micro->created, 'custom', 'Y-m-d H:i:s O');
+  }
+  
+  // Default values.
+  foreach (field_info_instances('micro', $micro->type) as $field_name => $field) {
+    if (!empty($field['micro']['is_author'])) {
+      global $user;
+      $micro->{$field_name}[LANGUAGE_NONE][0]['target_id'] = empty($micro->{$field_name}[LANGUAGE_NONE][0]['target_id']) ? $user->uid : $micro->{$field_name}[LANGUAGE_NONE][0]['target_id'];
+    }
+    if (!empty($field['micro']['is_created'])) {
+      global $user;
+      $micro->{$field_name}[LANGUAGE_NONE][0]['value'] = empty($micro->{$field_name}[LANGUAGE_NONE][0]['value']) ? REQUEST_TIME : $micro->{$field_name}[LANGUAGE_NONE][0]['value'];
+    }
+  }
+
+  micro_invoke($micro, 'prepare');
+  module_invoke_all('micro_prepare', $micro);
+}
+
+/**
+ * Builds a structured array representing the micro's content.
+ *
+ * The content built for the micro (field values, comments, file attachments or
+ * other micro components) will vary depending on the $view_mode parameter.
+ *
+ * Micro defines the following view modes for micro items, with the following
+ * default use cases:
+ *   - small (default): micro is being displayed within its parent entity
+ *   - full: micro is being displayed on its own page (micro/123)
+ *   - rss: micro displayed in an RSS feed.
+ *   If search.module is enabled:
+ *   - search_index: micro is being indexed for search.
+ *   - search_result: micro is being displayed as a search result.
+ *
+ * Contributed modules might define additional view modes, or use existing
+ * view modes in additional contexts.
+ *
+ * @param $micro
+ *   A micro object.
+ * @param $view_mode
+ *   View mode, e.g. 'full', 'small'...
+ */
+function micro_build_content($micro, $view_mode = 'small') {
+  // Remove previously built content, if exists.
+  $micro->content = array();
+
+  // The 'view' hook can be implemented to overwrite the default function
+  // to display micro items.
+  if (micro_hook($micro, 'view')) {
+    $micro = micro_invoke($micro, 'view', $view_mode);
+  }
+
+  // Build fields content.
+  // In case of a multiple view, micro_view_multiple() already ran the
+  // 'prepare_view' step. An internal flag prevents the operation from running
+  // twice.
+  field_attach_prepare_view('micro', array($micro->mid => $micro), $view_mode);
+  entity_prepare_view('micro', array($micro->mid => $micro));
+
+  $micro->content += field_attach_view('micro', $micro, $view_mode);
+
+  $links = array();
+  //TODO - theme callback
+  $micro->content['links'] = array(
+    '#theme' => 'links__micro',
+    '#links' => $links,
+    '#attributes' => array('class' => array('links', 'inline')),
+  );
+
+  // Allow modules to make their own additions to the micro.
+  module_invoke_all('micro_view', $micro, $view_mode);
+}
+
+/**
+ * Perform validation checks on the given micro.
+ */
+function micro_validate($micro, $form, &$form_state) {
+  $type = micro_type_get_type($micro);
+
+  // Invoke hook_validate() for micro type specific validation and
+  // hook_micro_validate() for miscellaneous validation needed by modules. Can't
+  // use micro_invoke() or module_invoke_all(), because $form_state must be
+  // receivable by reference.
+  $function = micro_type_get_module($micro) . '_micro_validate';
+  if (function_exists($function)) {
+    $function($micro, $form, $form_state);
+  }
+  foreach (module_implements('micro_validate') as $module) {
+    $function = $module . '_micro_validate';
+    $function($micro, $form, $form_state);
+  }
+}
+
+/**
+ * Prepare micro for saving by populating author and creation date.
+ */
+function micro_submit($micro) {
+  global $user;
+  $micro->uid = $user->uid;
+  $micro->name = $user->name;
+  $micro->created = REQUEST_TIME;
+  $micro->validated = TRUE;
+  return $micro;
+}
+
+/**
+ * Generate an array for rendering the given micro.
+ *
+ * @param $micro
+ *   A micro object.
+ * @param $view_mode
+ *   View mode, e.g. 'full', 'small'...
+ *
+ * @return
+ *   An array as expected by drupal_render().
+ */
+function micro_view($micro, $view_mode = 'small') {
+  // Populate $micro->content with a render() array.
+  micro_build_content($micro, $view_mode);
+  $micro_type = micro_type_get_type($micro);
+
+  $build = $micro->content;
+  // We don't need duplicate rendering info in micro->content.
+  unset($micro->content);
+
+  $build += array(
+    '#theme' => 'micro',
+    '#micro' => $micro,
+    '#view_mode' => $view_mode,
+  );
+
+  // Add contextual links for this micro, except when the micro is already being
+  // displayed on its own page. Modules may alter this behavior (for example,
+  // to restrict contextual links to certain view modes) by implementing
+  // hook_micro_view_alter().
+  if (!empty($micro->mid) && !($view_mode == 'full' && micro_is_page($micro))) {
+    $build['#contextual_links']['micro'] = array('micro', array($micro->mid));
+  }
+
+  // Allow modules to modify the structured micro.
+  drupal_alter('micro_view', $build);
+  return $build;
+}
+
+/**
+ * Construct a drupal_render() style array from an array of loaded micro items.
+ *
+ * @param $micro_items
+ *   An array of micro items as returned by micro_load_multiple().
+ * @param $view_mode
+ *   View mode, e.g. 'full', 'small'...
+ * @param $weight
+ *   An integer representing the weight of the first micro in the list.
+ *
+ * @return
+ *   An array in the format expected by drupal_render().
+ */
+function micro_view_multiple($micro_items, $view_mode = 'full', $weight = 0) {
+  field_attach_prepare_view('micro', $micro_items, $view_mode);
+  entity_prepare_view('micro', $micro_items);
+  $build = array();
+  foreach ($micro_items as $micro) {
+    $build['micro_items'][$micro->mid] = micro_view($micro, $view_mode);
+    $build['micro_items'][$micro->mid]['#weight'] = $weight;
+    $weight++;
+  }
+  $build['micro_items']['#sorted'] = TRUE;
+  return $build;
+}
+
+/**
+ * Menu callback to view a single micro.
+ *
+ * @param $micro
+ *   A micro object.
+ */
+function micro_page_view($micro) {
+  // If there is a menu link to this micro, the link becomes the last part
+  // of the active trail, and the link name becomes the page title.
+  // Thus, we must explicitly set the page title to be the micro title.
+  $type = micro_type_get_type($micro);
+  drupal_set_title(micro_label($micro));
+  $uri = entity_uri('micro', $micro);
+  // Set the micro path as the canonical URL to prevent duplicate content.
+  drupal_add_html_head_link(array('rel' => 'canonical', 'href' => url($uri['path'], $uri['options'])), TRUE);
+  // Set the non-aliased path as a default shortlink.
+  drupal_add_html_head_link(array('rel' => 'shortlink', 'href' => url($uri['path'], array_merge($uri['options'], array('alias' => TRUE)))), TRUE);
+  return micro_view_multiple(array($micro->mid => $micro));
+}
+
+
+/**
+ * Menu argument loader: loads a micro type by string.
+ *
+ * @param $name
+ *   The machine-readable name of a micro type to load, where '_' is replaced
+ *   with '-'.
+ *
+ * @return
+ *   A micro type object or FALSE if $name does not exist.
+ */
+function micro_type_load($name) {
+  return micro_type_get_type(strtr($name, array('-' => '_')));
+}
+
+/**
+ * Saves a micro type to the db.
+ *
+ * @param $type
+ *   A micro type object.
+ */
+function micro_type_save(MicroType $type) {
+  /*
+   *$type = micro_type_set_defaults($type);
+   */
+  $type->save();
+  drupal_static_reset('_micro_types_build');
+}
+
+/**
+ * Deletes a micro type from the db.
+ *
+ * @param $type
+ *   A micro type object.
+ */
+function micro_type_delete(MicroType $type) {
+  $type->delete();
+  drupal_static_reset('_micro_types_build');
+}
+
+/**
+ * Set the default values for a micro type.
+ *
+ * The defaults for bundles defined through hook_micro_info().
+ *
+ * @param $info
+ *   An object or array containing values to override the defaults.
+ *
+ * @return
+ *  A micro type object.
+ */
+function micro_type_set_defaults($info = array()) {
+  $type = &drupal_static(__FUNCTION__);
+  if (!isset($type)) {
+    $type = new MicroType();
+    $type->machine_name = '';
+    $type->name = '';
+    $type->description = '';
+    $type->disabled = 0;
+    /*
+     *$type->status = 0;
+     */
+    if (empty($info['module'])) {
+      $type->is_new = 1;
+    }
+  }
+  $new_type = clone $type;
+  foreach ($info as $key => $data) {
+    $new_type->$key = $data;
+  }
+  if (empty($new_type->module)) {
+    $new_type->module = 'micro';
+  }
+
+  return $new_type;
+}
+
+/**
+ * Returns a list of all the available micro types.
+ *
+ * This list can include types that are queued for addition or deletion.
+ * See _micro_types_build() for details.
+ *
+ * @return
+ *   An array of micro types, keyed by the type.
+ *
+ * @see micro_type_get_type()
+ */
+function micro_type_get_types($rebuild = FALSE) {
+  return _micro_types_build($rebuild)->types;
+}
+
+/**
+ * Returns the micro type of the passed micro or micro type string.
+ *
+ * @param $micro
+ *   A micro object or string that indicates the micro type to return.
+ *
+ * @return
+ *   A single micro type, as an object, or FALSE if the micro type is not found.
+ *   The micro type is an object containing fields from hook_micro_info() return
+ *   values, as well as the field 'type' (the machine-readable type) and other
+ *   fields used internally and defined in _micro_types_build(),
+ *   hook_micro_info(), and micro_type_set_defaults().
+ */
+function micro_type_get_type($micro, $object = TRUE) {
+  if (is_object($micro) || !is_numeric($micro)) {
+    $type = is_object($micro) ? $micro->type : $micro;
+    $types = _micro_types_build()->types;
+    return isset($types[$type]) ? ($object ? $types[$type] : $types[$type]->machine_name) : FALSE;
+  }
+  else {
+    $id = $micro;
+    $types = _micro_types_build()->ids;
+    return isset($types[$id]) ? ($object ? $types[$id] : $types[$id]->machine_name) : FALSE;
+  }
+}
+
+/**
+ * Returns the micro type module of the passed micro or micro type string.
+ *
+ * Indicates which module implements this micro type and is used to
+ * execute micro-type-specific hooks.
+ *
+ * @param $micro
+ *   A micro object or string that indicates the micro type to return.
+ *
+ * @return
+ *   The micro type module or FALSE if the micro type is not found.
+ *
+ * @see micro_invoke()
+ */
+function micro_type_get_module($micro) {
+  if (is_object($micro) || !is_numeric($micro)) {
+    $type = is_object($micro) ? $micro->type : $micro;
+    $types = _micro_types_build()->types;
+    return isset($types[$type]) && isset($types[$type]->module) ? $types[$type]->module : FALSE;
+  }
+  else {
+    $types = _micro_types_build()->ids;
+    return isset($types[$micro]) && isset($types[$micro]->module) ? $types[$micro]->module: FALSE;
+  }
+}
+
+/**
+ * Returns a list of available micro type names.
+ *
+ * This list can include types that are queued for addition or deletion.
+ * See _micro_types_build() for details.
+ *
+ * @return
+ *   An array of micro type names, keyed by the type.
+ */
+function micro_type_get_names() {
+  return _micro_types_build()->names;
+}
+
+/**
+ * Returns the micro type name of the passed micro or micro type string.
+ *
+ * @param $micro
+ *   A micro object or string that indicates the micro type to return.
+ *
+ * @return
+ *   The micro type name or FALSE if the micro type is not found.
+ */
+function micro_type_get_name($micro) {
+  if (is_object($micro) || !is_numeric($micro)) {
+    $type = is_object($micro) ? $micro->type : $micro;
+    $types = _micro_types_build()->types;
+    return isset($types[$type]) && isset($types[$type]->name) ? $types[$type]->name : FALSE;
+  }
+  else {
+    $names = _micro_types_build()->names;
+    return isset($names[$micro]) ? $names[$micro] : FALSE;
+  }
+}
+
+/**
+ * Updates the database cache of micro types.
+ *
+ * All new module-defined micro types are saved to the database via a call to
+ * micro_type_save(), and obsolete ones are deleted via a call to
+ * micro_type_delete(). See _micro_types_build() for an explanation of the new
+ * and obsolete types.
+ */
+function micro_types_rebuild() {
+  _micro_types_build(TRUE);
+}
+
+/**
+ * Returns information about micro input types from hook_micro_input_info().
+ *
+ * @param $input_type
+ *   (optional) A input type name. If ommitted, all input types will be
+ *   returned.
+ *
+ * @return
+ *   Either a single input type description, as provided by
+ *   hook_micro_input_info(), or an array of all existing input types, keyed
+ *   by input type name.
+ */
+function micro_input_types($input_type = NULL) {
+  $info = _micro_displays_build();
+  $input_types = $info['input_types'];
+  if ($input_type) {
+    if (isset($input_types[$input_type])) {
+      return $input_types[$input_type];
+    }
+  }
+  else {
+    return $input_types;
+  }
+}
+
+/**
+ * Returns information about micro displays from hook_micro_display_info().
+ *
+ * @param $display_type
+ *   (optional) A display type name. If ommitted, all display types will be
+ *   returned.
+ *
+ * @return
+ *   Either a single display type description, as provided by
+ *   hook_micro_display_info(), or an array of all existing display types,
+ *   keyed by display type name.
+ */
+function micro_display_types($display_type = NULL) {
+  $info = _micro_displays_build();
+  $display_types = $info['display_types'];
+  if ($display_type) {
+    if (isset($display_types[$display_type])) {
+      return $display_types[$display_type];
+    }
+  }
+  else {
+    return $display_types;
+  }
+}
+
+/**
+ * Builds all information on input types and display types for micro items.
+ *
+ * @param $reset
+ *   If TRUE, clear the cache. The information will be rebuilt from the database
+ *   next time it is needed. Defaults to FALSE.
+ *
+ * @return
+ *   If $reset is TRUE, nothing.
+ *   If $reset is FALSE, an array containing the following elements:
+ *   - 'input types': Array of hook_micro_input_info() results, keyed by
+ *     input_type. Each element has the following components: label, micro
+ *     types, settings, and behaviors from hook_micro_input_info(), as well
+ *     as module, giving the module that exposes the input type.
+ *   - 'display types': Array of hook_micro_display_info() results, keyed by
+ *     display_type. Each element has the following components: label, micro
+ *     types, and behaviors from hook_micro_display_info(), as well as
+ *     module, giving the module that exposes the display type.
+ */
+function _micro_displays_build($reset = FALSE) {
+  static $info;
+
+  if ($reset) {
+    $info = NULL;
+    variable_del("micro_display_types");
+    return;
+  }
+
+  if (!isset($info)) {
+    //TODO
+      if ($cached = variable_get("micro_view_types")) {
+      $info = $cached->data;
+    }
+    else {
+      $info = array(
+        'input_types' => array(),
+        'display_types' => array(),
+      );
+
+      // Populate input types.
+      foreach (module_implements('micro_input_info') as $module) {
+        $input_types = (array) module_invoke($module, 'micro_input_info');
+        foreach ($input_types as $name => $input_info) {
+          // Provide defaults.
+          $input_info += array(
+            'settings' => array(),
+          );
+          $info['input_types'][$name] = $input_info;
+          $info['input_types'][$name]['module'] = $module;
+        }
+      }
+      drupal_alter('micro_input_info', $info['input_types']);
+
+      // Populate display types.
+      foreach (module_implements('micro_display_info') as $module) {
+        $display_types = (array) module_invoke($module, 'micro_display_info');
+        foreach ($display_types as $name => $display_info) {
+          // Provide defaults.
+          $display_info += array(
+            'settings' => array(),
+          );
+          $info['display_types'][$name] = $display_info;
+          $info['display_types'][$name]['module'] = $module;
+        }
+      }
+      drupal_alter('micro_display_info', $info['display_types']);
+
+      variable_set("micro_display_types", $info);
+    }
+  }
+
+  return $info;
+}
+
+/**
+ * Builds and returns the list of available micro types.
+ *
+ * The list of types is built by invoking hook_micro_info() on all modules and
+ * comparing this information with the micro types in the {micro_type} table.
+ * These two information sources are not synchronized during module installation
+ * until micro_types_rebuild() is called.
+ *
+ * @param $rebuild
+ *  TRUE to rebuild micro types. Equivalent to calling micro_types_rebuild().
+ * @return
+ *   Associative array with two components:
+ *   - names: Associative array of the names of micro types, keyed by the type.
+ *   - types: Associative array of micro type objects, keyed by the type.
+ *   Both of these arrays will include new types that have been defined by
+ *   hook_micro_info() implementations but not yet saved in the {micro_type}
+ *   table. These are indicated in the type object by $type->is_new being set
+ *   to the value 1. These arrays will also include obsolete types: types that
+ *   were previously defined by modules that have now been disabled, or for
+ *   whatever reason are no longer being defined in hook_micro_info()
+ *   implementations, but are still in the database. These are indicated in the
+ *   type object by $type->disabled being set to TRUE.
+ */
+function _micro_types_build($rebuild = FALSE) {
+  if (!$rebuild) {
+    $_micro_types = &drupal_static(__FUNCTION__);
+    if (is_object($_micro_types)) {
+      return $_micro_types;
+    }
+  }
+
+  $_micro_types = (object)array('types' => array(), 'names' => array(), 'ids' => array());
+
+  $info_array = array();
+  foreach (module_implements('micro_info') as $module) {
+    $info_array += module_invoke($module, 'micro_info');
+    foreach ($info_array as $type => $info) {
+      $info['type'] = $type;
+      $_micro_types->types[$type] = micro_type_set_defaults($info);
+      $_micro_types->types[$type]->module = $module;
+      $_micro_types->names[$type] = $info['name'];
+    }
+  }
+
+  $types = $rebuild ? (entity_load('micro_type', FALSE)) : entity_load('micro_type', FALSE, array('disabled' => '0')) ;
+  foreach ($types as $type_object) {
+    $type_db = $type_object->machine_name;
+    // Original disabled value.
+    $disabled = $type_object->disabled;
+    // Check for micro types from disabled modules and mark their types for removal.
+    // Types defined by the micro module in the database (rather than by a separate
+    // module using hook_micro_info) have a module value of 'micro'.
+    if (isset($type_object->module) && $type_object->module != 'micro' && empty($info_array[$type_db])) {
+      $type_object->disabled = TRUE;
+    }
+    if (isset($info_array[$type_db])) {
+      $type_object->disabled = FALSE;
+    }
+    if (!isset($_micro_types->types[$type_db]) || !isset($_micro_types->types[$type_db]->mtid)) {
+      $_micro_types->types[$type_db] = $type_object;
+      $_micro_types->names[$type_db] = $type_object->name;
+      $_micro_types->types[$type_db]->bundles = empty($_micro_types->types[$type_db]->bundles) ? array() : $_micro_types->types[$type_db]->bundles;
+    }
+    $_micro_types->types[$type_db]->disabled = $type_object->disabled;
+    $_micro_types->types[$type_db]->disabled_changed = $disabled != $type_object->disabled;
+  }
+  /*
+   *dsm($_micro_types);
+   */
+  if ($rebuild) {
+    foreach ($_micro_types->types as $type => $type_object) {
+      if (!empty($type_object->is_new) || !empty($type_object->disabled_changed)) {
+        micro_type_save($type_object);
+      }
+    }
+  }
+
+  // Allow modules implementing hook_micro_alter(&$micro_types) and hook_micro_TYPE_alter(&$micro_type) to modify each micro.
+  drupal_alter('micro', $_micro_types->types);
+  foreach ($_micro_types->types as $type) {
+    drupal_alter('micro_' . $type->machine_name, $type);
+    // After types are rebuilt, fill another array keyed by their ids.
+    if (isset($type->mtid)) {
+      $_micro_types->ids[$type->mtid] = $type;
+    }
+  }
+  asort($_micro_types->names);
+  return $_micro_types;
+}
+
+//============
+//MICRO HOOKS.
+//============
+
+/**
+ * Implements hook_micro_delete()
+ */
+function micro_micro_delete($micro) {
+  _micro_entity_delete('micro', $micro->type, $micro->mid);
+}
+
+/**
+ * Implements hook_micro_type_delete()
+ */
+function micro_micro_type_delete($type) {
+  // Delete all micro items of this type.
+  $mids = array_keys(micro_load_multiple(FALSE, array('type' => $type->machine_name)));
+  micro_delete_multiple($mids);
+}
+
+/**
+ * Implements hook_micro_access().
+ */
+function micro_micro_access($micro, $op, $account) {
+  // Basic checks
+  $type = is_string($micro) ? $micro : $micro->type;
+  if (in_array($type, array_keys(micro_type_get_types()))) {
+    if ($op == 'create' && user_access('create ' . $type . ' micro items', $account)) {
+      return MICRO_ACCESS_ALLOW;
+    }
+    if ($op == 'update') {
+      if (user_access('edit any ' . $type . ' micro items', $account) || (user_access('edit own ' . $type . ' micro items', $account) && ($account->uid == $micro->uid))) {
+        return MICRO_ACCESS_ALLOW;
+      }
+    }
+    if ($op == 'delete') {
+      if (user_access('delete any ' . $type . ' micro items', $account) || (user_access('delete own ' . $type . ' micro items', $account) && ($account->uid == $micro->uid))) {
+        return MICRO_ACCESS_ALLOW;
+      }
+    }
+    // Check for the following cases:
+    // - If viewing, check whether the user has access to view the entity.
+    // - If editing/deleting, check whether the user has permission and access to the operation on the entity.
+    if (($op == 'update' && user_access("edit attached $type micro items", $account)) ||
+        ($op == 'delete' && user_access("delete attached $type micro items", $account)) ||
+        ($op == 'view')) {
+      $micro_type = micro_type_get_type($micro);
+      switch ($micro_type->entity) {
+        case 'node':
+          $entity = node_load($micro->eid);
+          if (node_access($op, $entity, $account)) {
+            return MICRO_ACCESS_ALLOW;
+          }
+          break;
+        case 'user':
+          $entity = user_load($micro->eid);
+          if (($op != 'view' && user_edit_access($entity)) || ($op == 'view' && user_access('access user profiles', $account))) {
+            return MICRO_ACCESS_ALLOW;
+          }
+          break;
+        case 'comment':
+          $entity = comment_load($micro->eid);
+          if (comment_access($op, $entity)) {
+            return MICRO_ACCESS_ALLOW;
+          }
+          break;
+        case 'taxonomy':
+          $vocabulary = taxonomy_get_vocabulary($micro->eid);
+          // Since taxonomy doesn't have authorship, we check for editorial rights.
+          if (($op !== 'view' && user_access($op . ' terms ' . ($op == 'edit' ? 'in ' : 'from ') . $vocabulary)) ||
+              ($op == 'view')) {
+            return MICRO_ACCESS_ALLOW;
+          }
+          break;
+      }
+    }
+  }
+  return MICRO_ACCESS_IGNORE;
+}
+
+/**
+ * Implements hook_micro_display_info()
+ */
+function micro_micro_display_info() {
+  return array(
+    'wrapper' => array(
+      'label' => t('Inline'),
+      'micro_types' => array(),
+      'theme' => 'micro_wrapper',
+    ),
+  );
+}
+
+/**
+ * Implements hook_micro_input_info()
+ */
+function micro_micro_input_info() {
+  return array(
+    'linked_page_input' => array(
+      'label' => t('Linked page'),
+      'micro_types' => array(),
+      'theme' => 'micro_linked_page_input',
+    ),
+    'ajax_form_input' => array(
+      'label' => t('Ajax form'),
+      'micro_types' => array(),
+      'theme' => 'micro_ajax_form_input',
+    ),
+    'ajax_flag' => array(
+      'label' => t('Ajax flag'),
+      'micro_types' => array(),
+      'theme' => 'micro_ajax_flag',
+    ),
+    'inline_form_input' => array(
+      'label' => t('Inline form'),
+      'micro_types' => array(),
+      'theme' => 'micro_inline_form_input',
+    ),
+  );
+}
+
+/**
+ * Implements hook_form().
+ */
+function micro_micro_form($micro, $form_state) {
+  // It is impossible to define a content type without implementing hook_form()
+  $form = array();
+  return $form;
+}
+
+//=================
+//HELPER FUNCTIONS.
+//=================
+
+function micro_count_children($micro, $type = NULL) {
+  if ($type) {
+    $type = micro_type_get_type($type);
+    $count = db_result(db_query('SELECT COUNT(*) FROM {micro} m WHERE m.type = %s AND m.eid = %d', $type->machine_name, $micro->mid));
+  }
+  else {
+    $count = db_result(db_query('SELECT COUNT(*) FROM {micro} m INNER JOIN {micro_type} mt ON m.type = mt.machine_name WHERE mt.entity = %s AND m.eid = %d',  'micro', $micro->mid));
+  }
+}
+
+function micro_count_siblings($mid, $type = NULL) {
+  if ($type) {
+    $type = micro_type_get_type($type);
+    $count = db_result(db_query('SELECT COUNT(*) FROM {micro} m WHERE m.type = %s AND m.eid = %d', $type->machine_name, $micro->eid));
+  }
+  else {
+    $count = db_result(db_query('SELECT COUNT(*) FROM {micro} m INNER JOIN {micro_type} mt ON m.type = mt.machine_name WHERE mt.entity = %s AND m.eid = %d',  'micro', $micro->eid));
+  }
+}
+
+
+/**
+ * Entity uri callback.
+ */
+function micro_uri($micro) {
+  return array(
+    'path' => 'micro/' . $micro->mid,
+  );
+}
+
+/**
+ * Entity uri callback.
+ */
+function micro_label($micro) {
+  foreach (field_info_instances('micro', $micro->type) as $field_name => $field) {
+    if (!empty($field['micro']['is_title']) && !empty($micro->{$field_name}[LANGUAGE_NONE][0]['value'])) {
+      return check_plain($micro->{$field_name}[LANGUAGE_NONE][0]['value']);
+    }
+  }
+  return $micro->mid;
+}
+
+/**
+ * Returns whether the current page is the full page view of the passed in micro.
+ *
+ * @param $micro
+ *   A micro object.
+ */
+function micro_is_page($micro) {
+  $page_element = menu_get_object('micro');
+  return (!empty($page_element) ? (isset($page_element->mid) && $page_element->mid == $micro->mid) : FALSE);
+}
+
+/**
+ * Menu title callback.
+ */
+function micro_type_page_title($micro_type) {
+  return $micro_type->machine_name;
+}
+
+function micro_type_desactivate_bundle($id, $bundle) {
+  $micro_type = micro_type_get_type($id);
+  unset($micro_type->bundles[$bundle]);
+  micro_type_save($micro_type);
+}
+
+/**
+ * Content type checking to see if a micro applies to a certain type of data.
+ *
+ * @param $micro
+ *   The micro object whose available types are being checked.
+ * @param $entity
+ *   The entity being checked, usually "node".
+ * @param $bundle
+ *   The subtype being checked.
+ *
+ * @return
+ *   Boolean TRUE if the micro is enabled for this entity and bundle.
+ *   FALSE otherwise.
+ */
+function micro_content_enabled($micro_type, $entity, $bundle = NULL) {
+  $return = $micro_type->entity == $entity && (!isset($bundle) || in_array($bundle, $micro_type->bundles));
+  return $return;
+}
+
+/**
+ * Returns an array with entity labels, bundles, and view modes.
+ */
+function micro_get_entities($object = TRUE) {
+  if ($object) {
+    $entities['site'] = array('label' => t('Site'), 'bundles' => array('site' => 'Site'));
+    foreach (entity_get_info() as $entity => $data) {
+      if ($data['fieldable']) {
+        $entities[$entity] = array('label' => $data['label']);
+        foreach ($data['bundles'] as $bundle => $info) {
+         $entities[$entity]['bundles'][$bundle] = $info['label'];
+        }
+        foreach ($data['view modes'] as $mode => $info) {
+         $entities[$entity]['modes'][$mode] = $info['label'];
+        }
+      }
+    }
+  }
+  else {
+    $entities['site'] = t('Site');
+    foreach (entity_get_info() as $entity => $data) {
+      if ($data['fieldable']) {
+        $entities[$entity] = $data['label'];
+      }
+    }
+  }
+  return $entities;
+}
+
+/**
+ * Returns an array of micro types that should be managed by permissions.
+ *
+ * By default, this will include all micro types in the system. To exclude a
+ * specific micro from getting permissions defined for it, set the
+ * micro_permissions_$type variable to 0. Core does not provide an interface
+ * for doing so, however, contrib modules may exclude their own micros in
+ * hook_install(). Alternatively, contrib modules may configure all micro types
+ * at once, or decide to apply some other hook_micro_access() implementation
+ * to some or all micro types.
+ *
+ * @return
+ *   An array of micro types managed by this module.
+ */
+function micro_permissions_get_configured_types() {
+
+  $configured_types = array();
+
+  foreach (micro_type_get_types() as $type) {
+    if (variable_get('micro_permissions_' . $type->machine_name, 1)) {
+      $configured_types[] = $type;
+    }
+  }
+
+  return $configured_types;
+}
+
+/**
+ * Helper function to generate standard micro permission list for a given type.
+ *
+ * @param $type
+ *   The machine-readable name of the micro type.
+ * @return array
+ *   An array of permission names and descriptions.
+ */
+function micro_list_permissions($type) {
+  $type_name = check_plain($type->machine_name);
+
+  // Build standard list of micro permissions for this type.
+  $permissions = array(
+    "create $type_name micro items" => array(
+      'title' => t('%type_name: Create new items', array('%type_name' => $type->name)),
+    ),
+    "edit own $type_name micro items" => array(
+      'title' => t('%type_name: Edit own items', array('%type_name' => $type->name)),
+    ),
+    "edit attached $type_name micro items" => array(
+      'title' => t('%type_name: Edit %type_name items attached to own content', array('%type_name' => $type->name)),
+    ),
+    "edit any $type_name micro items" => array(
+      'title' => t('%type_name: Edit any items', array('%type_name' => $type->name)),
+    ),
+    "delete own $type_name micro items" => array(
+      'title' => t('%type_name: Delete own items', array('%type_name' => $type->name)),
+    ),
+    "delete attached $type_name micro items" => array(
+      'title' => t('%type_name: Delete %type_name items attached to own content', array('%type_name' => $type->name)),
+    ),
+    "delete any $type_name micro items" => array(
+      'title' => t('%type_name: Delete any items', array('%type_name' => $type->name)),
+    ),
+  );
+
+  return $permissions;
+}
+
+function _micro_entity_delete($entity_name, $entity_type, $eid) {
+  // TODO: Need to look at whether we delete a micro if an entity in a required entityreference field is deleted.
+}
+
+/**
+ * Theme callback for creating and editing micro items.
+ */
+function _micro_custom_theme() {
+  // Use the administration theme if the site is configured to use it for
+  // micro items.
+  if (variable_get('micro_admin_theme')) {
+    return variable_get('admin_theme');
+  }
+}
+
+function _micro_add_access() {
+  $types = micro_type_get_types();
+  foreach ($types as $type) {
+    if (micro_hook($type->machine_name, 'form') && micro_access('create', $type->machine_name)) {
+      return TRUE;
+    }
+  }
+  if (user_access('administer micro types')) {
+    // There are no micro types defined that the user has permission to create,
+    // but the user does have the permission to administer the micro types, so
+    // grant them access to the page anyway.
+    return TRUE;
+  }
+  return FALSE;
+}
+
+
+//================
+//THEME FUNCTIONS.
+//================
+
+/**
+ * Process variables for micro.tpl.php
+ *
+ * Most themes utilize their own copy of micro.tpl.php. The default is located
+ * inside "modules/micro/micro.tpl.php". Look in there for the full list of
+ * variables.
+ *
+ * The $variables array contains the following arguments:
+ * - $micro
+ * - $view_mode
+ * - $page
+ *
+ * @see micro.tpl.php
+ */
+function template_preprocess_micro(&$variables) {
+  $micro = $variables['elements']['#micro'];
+  $variables['micro']        = $micro;
+  $variables['micro_type']   = micro_type_get_type($micro);
+  $micro_type                = $variables['micro_type'];
+  $variables['view_mode']    = $variables['elements']['#view_mode'];
+  $uri                       = entity_uri('micro', $micro);
+  $variables['permalink']    = url($uri['path'], $uri['options']);
+  $variables['title']        = micro_label($micro);
+  $variables['page']         = $variables['view_mode'] == 'full' && micro_is_page($micro);
+
+  // Flatten the micro object's member fields.
+  $variables = array_merge((array) $micro, $variables);
+
+  // Helpful $content variable for templates.
+  foreach (element_children($variables['elements']) as $key) {
+    $variables['content'][$key] = $variables['elements'][$key];
+  }
+
+  // Make the field variables available with the appropriate language.
+  field_attach_preprocess('micro', $micro, $variables['elements'], $variables);
+
+  // Gather micro classes.
+  $variables['classes_array'][] = drupal_html_class('micro-' . $micro_type->machine_name);
+
+  // Clean up name so there are no underscores.
+  $variables['theme_hook_suggestions'][] = 'micro__' . $micro_type->machine_name;
+  $variables['theme_hook_suggestions'][] = 'micro__' . $micro->mid;
+}
+
+/**
+ * Process variables for micro-wrapper.tpl.php.
+ *
+ * @see micro-wrapper.tpl.php
+ * @see theme_micro_wrapper()
+ */
+function template_preprocess_micro_wrapper(&$variables) {
+  // Provide contextual information.
+  $bundle = $variables['content']['#bundle'];
+  $variables['bundle'] = $bundle;
+  $variables['type'] = $bundle->name;
+  $variables['items'] = $variables['content']['#items'];
+  $variables['view_mode'] = $variables['content']['#view_mode'];
+  $variables['eid'] = $variables['content']['#eid'];
+  $variables['form'] = $variables['content']['input'];
+
+  // Clean up name so there are no underscores.
+  $variables['theme_hook_suggestions'][] = 'micro_wrapper__' . $bundle->machine_name;
+}
+
+function theme_micro_inline_form_input($variables) {
+  $elements = $variables['elements'];
+  return drupal_render(micro_add($elements['#bundle']->machine_name, $elements['#eid'], FALSE));
+}
+
+function theme_micro_linked_page_input($variables) {
+  $elements = $variables['elements'];
+  $bundle = str_replace('_', '-', $elements['#bundle']->machine_name);
+  $strings = variable_get('micro_format_strings_' . $elements['#bundle']->machine_name);
+  return l(t('@string', array('@string' => $strings['string_create'])), "micro/add/$bundle/" . $elements['#eid']);
+}
+
+function theme_micro_ajax_edit($variables) {
+  drupal_add_js('misc/ajax.js');
+  $output = l(t('@label', array('@label' => 'edit')), 'micro/ajax/edit/nojs/' . $variables['mid'] . '/open',
+    array('attributes' => array('class' => array('use-ajax'), 'id' => array('micro-edit-' . $variables['mid']))));
+  return $output;
+}
+
+function micro_ajax_edit($type = 'ajax', $micro, $op = close) {
+  if ($type == 'ajax') {
+    $commands = array();
+    if ($op == 'open') {
+      include_once(drupal_get_path('module', 'micro') . '/micro.pages.inc');
+      $link = l(t('Close'), 'micro/ajax/edit/nojs/' . $micro->mid . '/close',
+        array('attributes' => array('class' => array('use-ajax'), 'id' => array('micro-edit-' . $micro->mid . '-link'))));
+      $type = micro_type_get_type($micro);
+      $form = drupal_render(drupal_get_form($type->machine_name . '_micro_form', $micro));
+      $output = '<div id="micro-edit-' . $micro->mid . '">' . $link . $form . '</div>';
+    }
+    else {
+      $output = l(t('@label', array('@label' => 'edit')), 'micro/ajax/edit/nojs/' . $micro->mid  . '/open',
+        array('attributes' => array('class' => array('use-ajax'), 'id' => array('micro-edit-' . $micro->mid))));
+    }
+    $commands[] = ajax_command_replace('#micro-edit-' . $micro->mid, $output);
+    $page = array('#type' => 'ajax', '#commands' => $commands);
+    ajax_deliver($page);
+  }
+  else {
+    $output = t("This is some content delivered via a page load.");
+    return $output;
+  }
+}
+
+function theme_micro_ajax_form_input($variables) {
+  drupal_add_js('misc/jquery.form.js');
+  drupal_add_js('misc/ajax.js');
+  $elements = $variables['elements'];
+  $bundle = str_replace('_', '-', $elements['#bundle']->machine_name);
+  $dash = $bundle . '-' . $elements['#eid'];
+  $slash = $bundle . '/' . $elements['#eid'];
+  $name = str_replace('-', ' ', $bundle);
+  $output = l(t('@type', array('@type' => ucfirst($name))), 'micro/ajax/add/nojs/' . $slash . '/open',
+    array('attributes' => array('class' => array('use-ajax'), 'id' => array('micro-add-' . $dash))));
+  return $output;
+}
+
+function micro_ajax_input($type = 'ajax', $micro_type, $eid, $op = 'close') {
+  if ($type == 'ajax') {
+    $bundle = str_replace('_', '-', $micro_type->machine_name);
+    $dash = $bundle . '-' . $eid;
+    $slash = $bundle . '/' . $eid;
+    $name = str_replace('-', ' ', $bundle);
+    $id = 'micro-add-' . $dash;
+    $commands = array();
+    if ($op == 'open') {
+      include_once(drupal_get_path('module', 'micro') . '/micro.pages.inc');
+      $link = l(t('Close'), 'micro/ajax/add/nojs/' . $slash . '/close',
+        array('attributes' => array('class' => array('use-ajax'), 'id' => array('micro-add-' . $dash . '-link'))));
+      $form = drupal_render(micro_add($micro_type->machine_name, $eid, FALSE));
+      $output = '<div id="' . $id . '">' . $link . $form . '</div>';
+    }
+    else {
+      $output = l(t('@type', array('@type' => ucfirst($name))), 'micro/ajax/add/nojs/' . $slash . '/open',
+        array('attributes' => array('class' => array('use-ajax'), 'id' => array('micro-add-' . $dash))));
+    }
+    $commands[] = ajax_command_replace('#' . $id, $output);
+    $page = array('#type' => 'ajax', '#commands' => $commands);
+    ajax_deliver($page);
+  }
+  else {
+    $output = t("This is some content delivered via a page load.");
+    return $output;
+  }
+}
+
+function theme_micro_ajax_flag($variables) {
+  drupal_add_js('misc/ajax.js');
+  global $user;
+  $elements = $variables['elements'];
+  $bundle = str_replace('_', '-', $elements['#bundle']->machine_name);
+  $name = str_replace('-', ' ', $bundle);
+  $micro = micro_load_multiple(FALSE, array('uid' => $user->uid, 'eid' => $elements['#eid'], 'type' => $elements['#bundle']->machine_name));
+  $strings = variable_get('micro_format_strings_' . $elements['#bundle']->machine_name);
+  if (!empty($micro)) {
+    $micro = current($micro);
+    $output = l(t('@string', array('@string' => $strings['string_delete'])), "micro/ajax/flag/nojs/$bundle/" . $elements['#eid'] . "/delete/$micro->mid",
+      array('attributes' => array('class' => array('use-ajax'), 'id' => array("micro-delete-$bundle-$micro->mid"))));
+  } else {
+    $output = l(t('@string', array('@string' => $strings['string_create'])), "micro/ajax/flag/nojs/$bundle/" . $elements['#eid'] . "/add/",
+      array('attributes' => array('class' => array('use-ajax'), 'id' => array("micro-add-$bundle-" . $elements['#eid']))));
+  }
+  return $output;
+}
+
+function micro_ajax_flag($type = 'ajax', $micro_type, $eid, $op = NULL, $mid = NULL) {
+  if ($type == 'ajax') {
+    global $user;
+    $bundle = str_replace('_', '-', $micro_type->machine_name);
+    $name = str_replace('-', ' ', $bundle);
+    $commands = array();
+    $strings = variable_get('micro_format_strings_' . $micro_type->machine_name);
+    if ($op == 'delete' && !empty($mid)) {
+      // TODO - check permission
+      micro_delete_multiple(array($mid));
+      $class = "micro-delete-$bundle-$mid";
+      $output = l(t('@string', array('@string' => $strings['string_create'])), "micro/ajax/flag/nojs/$bundle/$eid/add/",
+        array('attributes' => array('class' => array('use-ajax'), 'id' => array("micro-add-$bundle-$eid"))));
+    }
+    elseif ($op == 'add') {
+      $micro = micro_create(array('uid' => $user->uid, 'type' => $micro_type->machine_name, 'eid' => $eid, 'name' => $user->name));
+      micro_save($micro);
+      $class = "micro-add-$bundle-$eid";
+      $output = l(t('@string', array('@string' => $strings['string_delete'])), "micro/ajax/flag/nojs/$bundle/$eid/delete/$micro->mid",
+        array('attributes' => array('class' => array('use-ajax'), 'id' => array("micro-delete-$bundle-$micro->mid"))));
+    }
+    $commands[] = ajax_command_replace('#' . $class, $output);
+    $page = array('#type' => 'ajax', '#commands' => $commands);
+    ajax_deliver($page);
+  }
+  else {
+    $output = t("This is some content delivered via a page load.");
+    return $output;
+  }
+}
+
+/**
+ * List all entityreference backreferences.
+ */
+function micro_entityreference_backreferences() {
+  $backreferences = &drupal_static(__FUNCTION__);
+  if (isset($backreferences)) {
+    return $backreferences;
+  }
+  else {
+    $backreferences = array();
+  }
+  
+  $field_instance_micro_types = array();
+  $fields = field_info_fields();
+  $entity_bundles = array();
+  foreach (entity_get_info() as $entity => $entity_info) {
+    foreach (array_keys($entity_info['bundles']) as $bundle) {
+      $entity_bundles[$entity][$bundle] = $bundle;
+    }
+  }
+
+  foreach ($fields as $field_name => $field) {
+    if ($field['type'] == 'entityreference' && array_key_exists('micro', $field['bundles'])) {
+      $field_instance_micro_types[$field['field_name']] = $field['bundles']['micro'];
+    }
+  }
+  foreach ($field_instance_micro_types as $field_name => $micro_types) {
+    foreach ($micro_types as $micro_type_name) {
+      $instance = field_info_instance('micro', $field_name, $micro_type_name);
+      $backreferences[$fields[$field_name]['settings']['target_type']][$micro_type_name][$field_name] = array(
+        'bundles' => count($fields[$field_name]['settings']['handler_settings']['target_bundles']) ? $fields[$field_name]['settings']['handler_settings']['target_bundles'] : $entity_bundles[$fields[$field_name]['settings']['target_type']],
+        'settings' => $instance['micro'],
+      );
+    }
+  }
+
+  return $backreferences;
+}
+
+/**
+ * List all entity backreferences for a bundle.
+ */
+function micro_entityreference_bundle_backreferences($entity_type, $bundle) {
+  $backreferences = &drupal_static(__FUNCTION__);
+  if (isset($backreferences[$entity_type][$bundle])) {
+    return $backreferences[$entity_type][$bundle];
+  }
+  elseif (!isset($backreferences)) {
+    $backreferences = array();
+  }
+  
+  $entity_backreferences = micro_entityreference_backreferences();
+  if (empty($entity_backreferences[$entity_type])) {
+    return;
+  }
+  foreach ($entity_backreferences[$entity_type] as $micro_type => $micro_fields) {
+    foreach ($micro_fields as $field_name => $field_settings) {
+      if (in_array($bundle, $field_settings['bundles'])) {
+        $backreferences[$entity_type][$bundle][$micro_type][$field_name] = $field_settings['settings'];
+      }
+    }
+  }
+  
+  return $backreferences[$entity_type][$bundle];
+}
+
+/**
+ * Menu callback to view a list of micros that reference an entity.
+ *
+ * @param $entity
+ *   The full entity object.
+ * 
+ * @param $micro_type
+ *   The name of the referencing micro type.
+ * 
+ * @field_name
+ *   The name of the entityreference field.
+ */
+function micro_entityreference_backreferences_page_view($entity, $micro_type, $field_name) {
+  // Build the sortable table header.
+  $header = array(
+    'mid' => array(
+      'data' => t('ID'),
+      'field' => 'm.mid',
+      'sort' => 'DESC',
+    ),
+  );
+  $header['operations'] = array('data' => t('Operations'));
+  
+  $field_info = field_info_field($field_name);
+  list($eid, $rid, $bundle) = entity_extract_ids($field_info['settings']['target_type'], $entity);
+
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'micro')
+    ->propertyCondition('type', array($micro_type))
+    ->fieldCondition($field_name, 'target_id', $eid, '=')
+    ->propertyOrderBy('mid', 'DESC')
+    ->pager(10);
+  $result = $query->execute();
+  
+  if (empty($result['micro'])) {
+    return array('#markup' => '<p>' . t('Nada.') . '</p>');
+  }
+  
+  $micros = micro_load_multiple(array_keys($result['micro']));
+  
+  // Prepare the list of micros.
+  $destination = drupal_get_destination();
+  $options = array();
+  foreach ($micros as $micro) {
+    $rows[$micro->mid] = array(
+      'mid' => array(
+        'data' => array(
+          '#type' => 'link', 
+          '#title' => micro_label($micro),
+          '#href' => 'micro/' . $micro->mid, 
+        ),
+      ), 
+    );
+    // Build a list of all the accessible operations for the current micro.
+    $operations = array();
+    if (micro_access('update', $micro)) {
+      $operations['edit'] = array(
+        'title' => t('edit'), 
+        'href' => 'micro/' . $micro->mid . '/edit', 
+        'query' => $destination,
+      );
+    }
+    if (micro_access('delete', $micro)) {
+      $operations['delete'] = array(
+        'title' => t('delete'), 
+        'href' => 'micro/' . $micro->mid . '/delete', 
+        'query' => $destination,
+      );
+    }
+    $rows[$micro->mid]['operations'] = array();
+    if (count($operations) > 1) {
+      // Render an unordered list of operations links.
+      $rows[$micro->mid]['operations'] = array(
+        'data' => array(
+          '#theme' => 'links__micro_operations', 
+          '#links' => $operations, 
+          '#attributes' => array('class' => array('links', 'inline')),
+        ),
+      );
+    }
+    elseif (!empty($rows)) {
+      // Render the first and only operation as a link.
+      $link = reset($operations);
+      $rows[$micro->mid]['operations'] = array(
+        'data' => array(
+          '#type' => 'link', 
+          '#title' => $link['title'], 
+          '#href' => $link['href'], 
+          '#options' => array('query' => $link['query']),
+        ),
+      );
+    }
+  }
+
+  $output['micro'] = array(
+    '#theme' => 'table', 
+    '#header' => $header, 
+    '#rows' => $rows, 
+    '#empty' => t('No content available.'),
+  );
+
+  $output['pager'] = array('#markup' => theme('pager'));
+  return $output;
+}
+
+//==================
+//VIEWS INTEGRATION.
+//==================
+
+/**
+ * Implements hook_views_api().
+ */
+function micro_views_api() {
+  return array(
+    'api' => '3.0-alpha1',
+    'path' => drupal_get_path('module', 'micro') . '/includes',
+  );
+}
+
+/*
+These may be useful for http://drupal.org/node/1477958:
+hook_field_display_alter(&$display, $context)
+hook_field_display_ENTITY_TYPE_alter(&$display, $context) (already implemented above)
+*/

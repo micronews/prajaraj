@@ -1,0 +1,38 @@
+name = Micronews
+description = A flexible and responsive theme with many regions.
+package = Core
+version = 7.x
+core = 7.x
+
+
+stylesheets[all][] = css/bootstrap.css
+stylesheets[all][] = css/bootstrap.min.css
+stylesheets[all][] = css/bootstrap-responsive.css
+stylesheets[all][] = css/bootstrap-responsive.min.css
+stylesheets[all][] = css/custom.css
+stylesheets[all][] = css/jquery.fancybox.css
+
+
+regions[content] = Content
+regions[page_top] = Page top
+regions[banner] = Banner
+regions[main_menu] = Main Menu
+regions[rightsidebar1] = Right Sidebar One
+regions[rightsidebar2] = Right Sidebar Two
+regions[rightsidebar3] = Right Sidebar Three
+regions[rightsidebar4] = Right Sidebar Four
+regions[rightsidebar5] = Right Sidebar Five
+regions[rightsidebar6] = Right Sidebar Six
+regions[leftsidebar1] = Left Sidebar One
+regions[leftsidebar2] = Left Sidebar Two
+regions[leftsidebar3] = Left Sidebar Three
+regions[leftsidebar4] = Left Sidebar Four
+regions[upper_footer] = Upper Footer
+regions[lower_footer] = Lower Footer
+regions[usable_one] = Usable One
+regions[usable_two] = Usable Two
+regions[usable_three] = Usable Three
+regions[usable_four] = Usable Four
+regions[usable_five] = Usable Five
+regions[usable_six] = Usable Six
+

@@ -1,0 +1,238 @@
+body{
+	background: #555;
+}
+
+.banner {
+        background: url(../img/change.jpg);
+        height: 170px;
+}
+
+
+
+.menu-row, .common-list-row, .heading-row, .banner-row, .content-row{
+	float: none;
+	margin: 0 auto;
+}
+
+
+.heading h1{
+	font-size: 25px;
+	color: #800;
+}
+
+
+.menu-block {
+	background: #800;
+}
+
+.menu-block ul li a{
+	color: #fff;
+	padding: 8px 15px;
+	text-transform: uppercase;
+	background: #800;
+	 
+}
+
+
+.menu-block ul li a:hover{
+	color: #800;
+	background: #fff;
+	text-decoration: none;
+}
+
+.constituency-block{
+	margin-bottom: 15px;
+	margin-top: 10px;
+	padding: 15px 10px 15px 5px;
+	background: #fefefe;
+ }
+
+.constituency-block h4{
+	line-height: 20px;
+	color: #165C8B;
+	padding-left: 0px;
+}
+
+.constituency-block h6{
+	line-height: 12px;
+	margin: 5px 0px;
+	color: #10BED1;
+}
+
+.issue {
+	
+	background: #fefefe;
+} 
+
+.total-whole{
+	float: left;
+}
+
+.total-whole .total-title {
+        color: #fff;
+        font-size: 17px;
+        font-weight: bold;
+        margin-top: 14px;
+        margin-left: 90px;
+        text-transform: uppercase;
+}
+
+.total-today .total-title {
+       color: #fff;
+        font-size: 17px;
+        font-weight: bold;
+        margin-top: 14px;
+        margin-left: 0px;
+        text-transform: uppercase;
+}
+
+.total-block {
+         
+        background: url(../img/micronews2.jpg);
+        height: 100px;
+}
+
+.total-whole .total-data{
+	font-size: 40px;
+	color: #a00;
+	font-weight: bold;
+	margin-left: 100px;
+	margin-top: 28px;
+
+
+}
+
+.total-today .total-data{
+	font-size: 40px;
+	color: #a00;
+	font-weight: bold;
+	margin-left: 50px;
+	margin-top: 28px;
+}
+
+ 
+.total-online .total-title {
+       color: #fff;
+        font-size: 17px;
+        font-weight: bold;
+        margin-top: 14px;
+        margin-left: -10px;
+        text-transform: uppercase;
+}
+
+.total-online .total-data{
+	font-size: 40px;
+	color: #a00;
+	font-weight: bold;
+	margin-left: 20px;
+	margin-top: 28px;
+
+
+}
+
+.dble {
+	margin-left: 0;
+}
+
+/*For views related to particular MLA, ie; view-common , block_1*/
+
+.quicktabs-mla .view-common .views-row{
+	background: #f0f0f0;
+	padding: 5px 5px 5px 10px;
+	margin: 4px 0px;
+}
+
+.view-common .issue-name{
+	font-size: 15px;
+
+}
+
+.view-common .posted{
+	font-size: 10px;
+	color: #777;
+}
+
+.posted .vcard{
+	display: inline;
+}
+
+.posted .adr{
+	display: inline;
+}
+
+#micronews-edit-form .field-name-field-mla-taxo{
+	display: none;
+}
+
+#micronews-edit-form .field-name-field-author{
+	display: none;
+}
+
+.view-micronews-comments .comment-division {
+	background: #eeeeee;
+	padding: 15px 5px 15px 10px;
+	margin: 4px 0px;
+}
+.view-micronews-comments .comment-division .comment-title{
+	font-size: 14px;
+	 
+	color: #666;
+	text-transform: uppercase;
+}
+
+.view-micronews-comments .comment-division .comment-author{
+	font-size: 14px;
+	 
+	color: #888;
+	text-transform: uppercase;
+} 
+
+.view-micronews-comments .comment-division .comment-author a{
+	font-size: 15px;
+	 
+	color: #888;
+	text-transform: uppercase;
+}
+
+
+.comment-section-title{
+	text-transform: uppercase;
+}
+
+
+.view-micronews-comments .comment-division {
+	
+}
+
+
+.constituency-block { 
+		padding: 15px 25px 55px;
+		border: 1px solid #C3C3C3;
+		margin-right: -2px;
+		margin-left: 60px;
+		margin-top: 20px;
+}
+.constituency-block h4 a {  color: #880000 !important; font-weight: normal; font-family: Arial, sans-serif;}
+.constituency-block h4.constituency-name {margin-top: 0px; border-bottom: 1px dotted #ececec; padding-bottom: 8px;}
+.constituency-block h6.issue-title {   background-color: #880000; color: #ececec; 
+	border: 1px dotted #ececec; display: table; font-weight: normal; padding: 3px 5px; font-size: .8em; }
+
+.constituency-block	.view-common .views-row  {  border-bottom: 1px dotted #ececec; padding-bottom: 5px; margin-bottom: 5px; margin-top: 5px;}
+ul.quicktabs-tabs.quicktabs-style-garland, ul.quicktabs-tabs.quicktabs-style-garland li.active a, 
+ul.quicktabs-tabs.quicktabs-style-garland li.active
+ {  background-image: none!important;  }
+ul.quicktabs-tabs.quicktabs-style-garland { background-color: #880000;}
+
+ul.quicktabs-tabs.quicktabs-style-garland li a {
+	 font-family: Arial, sans-serif!important; color: #fff; font-weight: normal!important; font-size: 12px; padding: 8px 12px 4px 11px; }
+
+ul.quicktabs-tabs.quicktabs-style-garland li.active a{ background-color: #f3f3f3!important; 
+	color:#880000!important;  padding: 12px 14px; margin-top: -5px;
+   position: relative; top: -3px; font-family: Arial, sans-serif; font-weight: bold!important;
+	 }
+
+.line-chart{
+
+}
+
+.container  { background:url(../img/bg_container.png); background-repeat:repeat-y; padding:0 25px 0 25px; background-position: center 0px; margin-bottom: -10px;}

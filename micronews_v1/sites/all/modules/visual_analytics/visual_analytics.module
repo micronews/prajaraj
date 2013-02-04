@@ -1,0 +1,592 @@
+<?php
+
+function visual_analytics_block_info() {
+  $blocks['line_chart_analytics'] = array(
+    'info' => t('Line Chart'), //The name that will appear in the block list.
+    'cache' => DRUPAL_CACHE_PER_ROLE, //Default
+  );
+
+
+$blocks['mp_pie_chart'] = array(
+    'info' => t('MP Pie Chart'), //The name that will appear in the block list.
+    'cache' => DRUPAL_CACHE_PER_ROLE, //Default
+  );
+
+$blocks['mla_pie_chart'] = array(
+    'info' => t('MLA Pie Chart'), //The name that will appear in the block list.
+    'cache' => DRUPAL_CACHE_PER_ROLE, //Default
+  );
+
+	$blocks['issue_line_chart'] = array(
+    'info' => t('Issues Line Chart'), //The name that will appear in the block list.
+    'cache' => DRUPAL_CACHE_PER_ROLE, //Default
+  );
+
+
+  return $blocks;
+}
+
+/**
+* Implements hook_block_view().
+*
+* Prepares the contents of the block.
+*/
+function visual_analytics_block_view($delta = '') { 
+ 
+
+ 	switch ($delta) {
+		case 'line_chart_analytics':
+			$block['subject'] = t('Line Chart');
+			$block['content'] = show_line_chart();  
+			break;
+		case 'mp_pie_chart':
+		 	$block['subject'] = t('MP Pie Chart');
+		 	$block['content'] = show_pie_chart_mp();  
+			break;
+
+		case 'mla_pie_chart':
+			$block['subject'] = t('MLA Pie Chart');
+			$block['content'] = show_pie_chart_mla();
+			break;
+
+		case 'issue_line_chart':
+			$block['subject'] = t('Issue Line Chart');
+			$block['content'] = show_line_chart_issues();
+			break;
+		
+ 	}
+
+ 	return $block;
+
+}
+
+		
+
+// function visual_analytics_menu(){
+
+// $items['visual_analytics/%'] = array(
+// 'title' => 'Visual Aanalytics',
+// 'description' => t('Visual Aanalytics'),
+// 'page callback' => 'show_visuals',
+// 'page arguments' => array(1),
+// 'access arguments' => array(1),
+
+// );
+ 
+//  return NULL;
+// }
+function includes_graph(){
+	require_once 'QConfig.class.php';
+	require_once 'QInflector.class.php';
+	require_once 'QTool.class.php';
+	require_once 'QGoogleGraph.class.php';
+	require_once 'QVizualisationGoogleGraph.class.php';
+	require_once 'QApikeyGoogleGraph.class.php';
+	require_once 'QLinechartGoogleGraph.class.php';
+	require_once 'QPiechartGoogleGraph.class.php';
+}
+ 
+ function show_pie_chart_mp(){
+ 	 
+    if(!arg(1)){
+    	return false;
+    	exit;
+    } 
+
+	includes_graph();
+		$chart = new QPiechartGoogleGraph;
+		$chart	->addDrawProperties(
+					array(
+						"title"=>'Comparison with others',
+						)
+					)
+				->addColumns(
+					array(
+						array('string', 'MLA'),
+						array('number', 'Updates count')
+						)
+					);
+
+ 		
+ 		$mla_count = array();
+ 		$title_list = array();
+ 		$mla_name = array();
+ 		
+ 		$child_id = arg(1);
+
+ 		$parents = taxonomy_get_parents(arg(1));
+
+ 		if($parents){
+
+ 			$chart->addDrawProperties(array("title"=>'Comparison with other MLA'));
+ 		  foreach ($parents as $parent) {
+ 		  		$mla_list = taxonomy_get_children($parent->tid);
+
+        foreach ($mla_list as $mla_id) {
+
+        	//$mla_name[] = $mla_id->name ;
+
+        	$query = db_select("field_data_field_constituency", "t");
+        	$query->fields('t', array('entity_id'));
+        	$query->condition('field_constituency_tid', $mla_id->tid,'=');
+			$result = $query->execute();
+			$count = $result->rowCount();
+			$mla_count[] = $count ;
+
+         
+          }
+ 		  }
+
+ 		   $title_list = taxonomy_get_children($parent->tid);
+ 		}
+
+ 		else{
+
+ 			$mla_list = taxonomy_get_tree('2');
+ 			$chart->addDrawProperties(array("title"=>'Comparison with other MP'));
+ 			foreach ($mla_list as $mla_id) {
+
+ 			if ($mla_id->depth == 0){
+
+ 				$title_list[]= taxonomy_term_load($mla_id->tid);
+        	$query = db_select("field_data_field_constituency", "t");
+        	$query->fields('t', array('entity_id'));
+          	$children = taxonomy_get_children($mla_id->tid);
+   					$db_or = db_or();
+		   			foreach ($children as $child) {
+		   				$db_or->condition('field_constituency_tid', $child->tid, '=');
+				      }
+
+   				$query->condition($db_or);
+			
+			$result = $query->execute();
+			$count = $result->rowCount();
+			$mla_count[] = $count ;
+         
+          }
+      }
+ 		}
+
+       	//$mla_list = taxonomy_get_children(arg(1));
+
+   //      foreach ($mla_list as $mla_id) {
+
+   //      	//$mla_name[] = $mla_id->name ;
+
+   //      	$query = db_select("field_data_field_constituency", "t");
+   //      	$query->fields('t', array('entity_id'));
+
+        
+   //        	if ($mla_id->depth == 0){
+   //        		$children = taxonomy_get_children(arg(1));
+   // 					$db_or = db_or();
+		 //   			foreach ($children as $child) {
+		 //   				$db_or->condition('field_constituency_tid', $child->tid, '=');
+			// 	      }
+
+   // 				$query->condition($db_or);
+        		
+   //       	}
+
+   //     	else{
+			
+			// $query->condition('field_constituency_tid', $mla_id->tid,'=');
+
+   //     	}
+			
+			// $result = $query->execute();
+			// $count = $result->rowCount();
+			// $mla_count[] = $count ;
+
+         
+   //        }
+
+        $val = 0;
+        foreach ($title_list as $title) {
+		$chart	->setValues(
+			array(
+			 array($val,0, $title->name),
+			 array($val,1, intval($mla_count[$val])),
+		));
+		$val++;
+		
+		}
+
+
+	ob_start(); // begin collecting output
+	$m =  $chart->render();
+	$result = ob_get_clean();
+	return $result;
+
+ }
+
+function get_issue_data(){
+		 
+    if(!arg(1)){
+    	return false;
+    	exit;
+    } 
+	
+		$issue_count = array();
+ 		$mla_tid = arg(1);
+         
+        $issue_type = array('water','electricity','lawandorder','traffic','sewage');
+      	   
+        foreach ($issue_type as $issue) {
+          
+        $query = db_select("field_data_field_type", "t");
+        $query->join('field_data_field_constituency', 'c', 't.entity_id = c.entity_id');
+        $query->groupBy('t.entity_id');   
+        $query->fields('t', array('field_type_value'))
+        ->condition('field_type_value', $issue,'=')
+        ->condition('field_constituency_tid', $mla_tid,'=');
+        $result = $query->execute();
+        $count = $result->rowCount();
+		
+		$issue_count[] = $count;
+         
+           }
+
+           return $issue_count;
+
+}
+
+
+ function show_pie_chart_mla(){
+
+    if(!arg(1)){
+    	return false;
+    	exit;
+    } 
+	
+
+		includes_graph();
+		$chart = new QPiechartGoogleGraph;
+		$chart	->addDrawProperties(
+					array(
+						"title"=>'Count of Issues',
+						)
+					)
+				->addColumns(
+					array(
+						array('string', 'MLA'),
+						array('number', 'Count of Issues')
+						)
+					);
+
+ 		$issue_count = array();
+ 		$mla_tid = arg(1);
+         
+        $issue_type = array('water','electricity','lawandorder','traffic','sewage');
+      	
+      	$val = 0;
+        foreach ($issue_type as $issue) {
+          
+        $query = db_select("field_data_field_type", "t");
+        $query->join('field_data_field_constituency', 'c', 't.entity_id = c.entity_id');
+        $query->groupBy('t.entity_id');   
+        $query->fields('t', array('field_type_value'));
+        $query->condition('field_type_value', $issue,'=');
+
+        $parent = taxonomy_get_parents(arg(1));
+
+        if($parent){
+        $query->condition('field_constituency_tid', $mla_tid,'=');
+   			 }
+
+   		else{
+
+   			$children = taxonomy_get_children(arg(1));
+   					$db_or = db_or();
+   			foreach ($children as $child) {
+   				$db_or->condition('field_constituency_tid', $child->tid, '=');
+		      }
+
+   				$query->condition($db_or);
+
+   			 }
+
+        $result = $query->execute();
+        $count = $result->rowCount();
+
+        $chart	->setValues(
+			array(
+			 array($val,0, $issue),
+			 array($val,1, intval($count)),
+		));
+
+		$val++;
+         
+           }
+
+  //       $val = 0;
+  //       foreach ($mla_list as $mla_id) {
+		// $chart	->setValues(
+		// 	array(
+		// 	 array($val,0, $mla_id->name),
+		// 	 array($val,1, intval($mla_count[$val])),
+		// ));
+		// $val++;
+		
+		// }
+	ob_start(); // begin collecting output
+	$m =  $chart->render();
+	$result = ob_get_clean();
+	return $result;
+
+ }
+
+		
+
+function show_line_chart(){
+
+    if(!arg(1)){
+    	return false;
+    	exit;
+    }
+
+	includes_graph();
+
+	$chart = new QLinechartGoogleGraph;
+	$chart	->addDrawProperties(
+			array(
+				"title"=>'Micronews Updates',
+				)
+			)
+		->addColumns(
+			array(
+				array('string', 'Date'),
+				array('number', 'Updates'),
+				)
+			);
+
+		$mic_count = array();
+
+		 for ($i=0; $i < 10; $i++) { 
+           
+        $tomorrow = strtotime("tomorrow") - $i * 86400;
+
+        $today = strtotime("today") - $i * 86400;
+
+
+        $query = db_select("micronews", "m");
+          $query->join('field_data_field_constituency', 'c', 'm.micronews_id = c.entity_id');
+       
+          $query->fields('m', array('micronews_id'))
+          		->condition('created', $tomorrow,'<=')
+            	->condition('created', $today,'>=')
+            	->condition('type', 'microupdate','=');
+
+            $parent = taxonomy_get_parents(arg(1));
+
+        if($parent){
+        $query->condition('field_constituency_tid', arg(1),'=');
+   			 }
+
+   		else{
+
+   			$children = taxonomy_get_children(arg(1));
+   					$db_or = db_or();
+   			foreach ($children as $child) {
+   				$db_or->condition('field_constituency_tid', $child->tid, '=');
+		      }
+
+   			$query->condition($db_or);
+
+   			 }
+
+          $result = $query->execute();
+          $count = $result->rowCount();
+          
+          $mic_count[] = $count ;
+		
+		}
+
+
+
+        $dates = array();
+        $first_day = strtotime('-1 month');
+        for ($i=0; $i <11 ; $i++) { 
+        	$prec = $i - 10;
+        	$dates[] = date('d-M', strtotime("$prec day"));
+
+        }
+
+		 
+		$val = 0;
+		$val_rev = 10;
+		foreach ($dates as $date_value) {
+		$chart	->setValues(
+			array(
+			 array($val,0, $date_value),
+			 array($val,1, intval($mic_count[$val_rev])),
+			));
+
+		$val++;
+		$val_rev--;
+
+		}
+
+// for ($i=0; $i < 3 ; $i++) { 
+	 
+// $chart	->setValues(
+// 			array(
+// 				array($i,0,'2005'),
+// 				array($i,1, 1000+100 * $val),
+// 				));
+
+// }
+
+// foreach ($val_array as $val_value) {
+
+// $chart	->setValues(
+// 			array(array($val,0,$val_value),
+// 				 array($val,1, 1000+100 * $val)
+// 				));
+ 
+// $val++;
+
+// }
+
+
+
+/*
+
+$test = array(
+				array(0, 0, '2004'),
+				array(0, 1, 1000),
+				// array(0, 2, 400),
+				array(1, 0, '2005'),
+				array(1, 1, 1170),
+				// array(1, 2, 460),
+				array(2, 0, '2006'),
+				array(2, 1, 660),
+				// array(2, 2, 1120),
+				array(3, 0, '2007'),
+				array(3, 1, 1030),
+				// array(3, 2, 540),
+			);
+
+
+ 
+ */
+	ob_start(); // begin collecting output
+	$m =  $chart->render();
+	$result = ob_get_clean();
+	return $result;
+}
+ 
+
+ function show_line_chart_issues(){
+
+ 	 
+    if(!arg(1)){
+    	return false;
+    	exit;
+    }
+
+ 		includes_graph();
+	
+	$chart = new QLinechartGoogleGraph;
+	$chart	->addDrawProperties(
+			array(
+				"title"=>'Micronews Updates',
+				)
+			)
+		->addColumns(
+			array(
+				array('string', 'Date'),
+				array('number', 'Water Updates count'),
+				array('number', 'Electricity Updates count'),
+				array('number', 'Law and Order Updates count'),
+				array('number', 'Traffic Updates count'),
+				array('number', 'Sewage Updates count'),
+				
+				)
+			);
+
+		$issue_count = array();
+            $mla_tid = arg(1);
+         
+        $issue_type = array('sewage','traffic','lawandorder','electricity','water');
+        
+        $val = 0;
+        $total  =array();
+        for ($i=0; $i < 10; $i++) { 
+           
+        $tomorrow = strtotime("tomorrow") - $i * 86400;
+
+        $today = strtotime("today") - $i * 86400;
+
+        foreach ($issue_type as $issue) {
+          
+        $query = db_select("field_data_field_type", "t");
+        $query->join('field_data_field_constituency', 'c', 't.entity_id = c.entity_id');
+        $query->join('micronews', 'm', 't.entity_id = m.micronews_id');
+        $query->groupBy('t.entity_id');   
+        $query->fields('t', array('entity_id'))
+          ->condition('field_type_value', $issue,'=')
+          ->condition('created', $tomorrow,'<=')
+          ->condition('created', $today,'>=');
+
+           $parent = taxonomy_get_parents(arg(1));
+
+        if($parent){
+        $query->condition('field_constituency_tid', $mla_tid,'=');
+   			 }
+
+   		else{
+
+   			$children = taxonomy_get_children(arg(1));
+   					$db_or = db_or();
+   			foreach ($children as $child) {
+   				$db_or->condition('field_constituency_tid', $child->tid, '=');
+		      }
+
+   				$query->condition($db_or);
+
+   			 }
+
+        $result = $query->execute();
+        $count = $result->rowCount();
+         
+        $total[] = $count;
+
+        }
+
+           }
+
+
+        $dates = array();
+        $first_day = strtotime('-1 month');
+        for ($i=0; $i <10 ; $i++) { 
+        	$prec = $i - 9;
+        	$dates[] = date('d-M', strtotime("$prec day"));
+
+        }
+
+		 
+		$val = 0 ;
+		$val_rev = 49;
+		foreach ($dates as $date_value) {
+		$chart	->setValues(
+			array(
+			 array($val,0, $date_value),
+			 array($val,1, intval($total[$val_rev])),
+			 array($val,2, intval($total[$val_rev-1])),
+	     	 array($val,3, intval($total[$val_rev-2])),
+			 array($val,4, intval($total[$val_rev-3])),
+			 array($val,5, intval($total[$val_rev-4])),
+			));
+
+		$val++;
+		$val_rev = $val_rev - 5;
+
+		}
+
+	ob_start(); // begin collecting output
+	$m =  $chart->render();
+	$result = ob_get_clean();
+	return $result;
+
+ }
