@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Messages>
+	<Category id='lo'>
+	<msg> rowdiness in on the rise in the neighbourhood. </msg>
+     <msg> police station staff not co-operative. </msg>
+     <msg> police is not working to hard to reach to people. </msg>
+    <msg> high level of distrust on police. </msg>
+    <msg> my area feels very insecure. </msg>
+    <msg> should not be there a police awareness day , once in 3 months , where citizen should be encouraged
+	    to review there police stations , if they are happy with service of staff. </msg>
+	   <msg> police station not well maintained, gives gloomy feeling. </msg>
+
+  <msg> quality of lawyers detriorating. </msg>
+   <msg> court compounds not well maintained. </msg>
+   <msg> should not there be a court awareness day , once in 3 months , where citizens should be encouraged 
+	   to review there courts , to check that they are  happy with service of the  staff. </msg>
+   <msg> judgements are dragging for long , improve the judiciary. </msg>
+   <msg> court system sucks, i want to bow out of contract of signing the constitution. </msg>
+
+</Category>
+<Category id='ws'>
+ <msg> no water supply in our area. </msg>
+  <msg> water charges are too much. </msg>
+   <msg> water pipes leaking all over the place , water contamination dangers. </msg> 
+   <msg> we have to heavily rely on tankers for water supply ,,, please look into it. </msg>
+</Category>
+<Category id='ee'>
+	<msg> power too costly , totally not affordable,  reduce prices. </msg>
+	<msg> powerlines are hanging too low in my neighbourhood. </msg>
+	<msg> transformers unprotected. </msg>
+	<msg> No initative from power department on educating customer. </msg>
+	<msg> Enough these power cuts, increase power generation capacity.  </msg>
+	<msg> power stations and transformers not well maintained,making my area look dirty. </msg>
+      <msg> why we do not have electricity awareness day,  I want to know what I pay for.  </msg>
+</Category>
+<Category id='tr'>
+
+	<msg>public buses not on time </msg>
+	<msg> public buses not there no my route. </msg>
+ <msg> buses not clean. </msg>
+ <msg> buses conductor being rude. </msg>
+ <msg> buses not sufficient. </msg>
+ <msg> autorickshaw refusal menance. </msg>
+ <msg> autorickshaw not following meters ... overcharging. </msg>
+ <msg> autorickshaw misbehavior menance </msg>
+
+</Category>
+<Category id='rd'>
+	<msg> road in bad shape.  </msg>
+	<msg> no roads in my area. </msg>
+  <msg> potholes everywhere on the road </msg>
+  <msg> congestion is causing the havoc in the city , we need a bridge. </msg>
+  <msg> please work with engineer deliver us congestion free routes. </msg>
+  <msg> we need metro tracks. </msg> 
+       
+
+</Category>
+<Category id='sm'>
+   <msg> sewage is over flowing everywhere. </msg>
+   <msg> lot of manholes left open. </msg>
+  <msg> sewage charges are too much. </msg>      
+  <msg> lot of garbage is left unaddressed. </msg>
+   <msg> my surrounding has become a garbage yard , please take care of it. </msg>
+  <msg> garbage has made environment like hell , is this the city we dreamt of. </msg>
+  <msg> please  increase the garbage truck capacity. </msg>
+   <msg> Streets are dirty all the time , please launch awareness programme. Explain how citizens can help. </msg>  
+</Category>
+
+</Messages>
+

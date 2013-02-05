@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<cities>
+	<city name='Bangalore' code='SBC'>
+	  <mla_area name='Bangalore South' mla_no='176' code='SBC101' mla_long='77.594563' mla_latt='12.971599'>
+			<ward_area name='Gottigere'></ward_area>
+			<ward_area name='Konankunte'></ward_area>
+			<ward_area name='Anjanapura'></ward_area>
+			<ward_area name='Vasanthpura'></ward_area>
+			<ward_area name='Uttarahalli'></ward_area>
+			<ward_area name='Yelchenahalli'></ward_area>
+			<ward_area name='Begur'></ward_area>
+	  </mla_area>
+	   <mla_area name='Basavanagudi' mla_no='170' code='SBC102' mla_long='77.574838' mla_latt='12.94223'>
+			<ward_area name='Basavanagudi'></ward_area>
+			<ward_area name='Hanumanth Nagar'></ward_area>
+			<ward_area name='Srinagar'></ward_area>
+			<ward_area name='Girinagar'></ward_area>
+			<ward_area name='Katriguppe'></ward_area>
+			<ward_area name='Vidyapeeta ward'></ward_area> 
+	  </mla_area>
+	  <mla_area name='Bommanahalli' mla_no='175' code='SBC103' mla_long='77.617947' mla_latt='12.89836'>
+		   <ward_area name='HSR Layout'></ward_area>
+		   <ward_area name='Bommanahalli'></ward_area>
+		   <ward_area name='Jaraganahalli'></ward_area> 
+		   <ward_area name='Puttenahalli'></ward_area> 
+		   <ward_area name='Bilekhalli'></ward_area> 
+		   <ward_area name='Hongasandra'></ward_area>
+		   <ward_area name='Mangammanapalya'></ward_area>
+		   <ward_area name='Singasandra'></ward_area>
+		   <ward_area name='Arakere'></ward_area> 
+	  </mla_area>
+	   <mla_area name='B T M Layout' mla_no='172' code='SBC104' mla_long='77.539006' mla_latt='13.015191'>
+	   <ward_area name='Lakkasandra'></ward_area>
+	   <ward_area name='Adugodi'></ward_area>
+	   <ward_area name='Ejipura'></ward_area>
+	   <ward_area name='Koramangala'></ward_area>
+	   <ward_area name='Suddagunte'></ward_area>
+	   <ward_area name='Palya'></ward_area>
+	   <ward_area name='Madivala'></ward_area>
+	   <ward_area name='Jakkasandra'></ward_area>
+	   <ward_area name='BTM Layout'></ward_area> 
+	  </mla_area>
+	   <mla_area name='Byatarayanapura' mla_no='152' code='SBC105' mla_long='77.589881' mla_latt='13.060944'>
+	   <ward_area name='Jakkuru'></ward_area>
+	   <ward_area name='Thanisandra'></ward_area>
+	   <ward_area name='Byatarayanapura'></ward_area>
+	   <ward_area name='Kodigehalli'></ward_area>
+	   <ward_area name='Vidyaranyapura'></ward_area>
+	   <ward_area name='Dodda'></ward_area>
+	   <ward_area name='Bommasandra'></ward_area>
+	   <ward_area name='Kuvempu Nagar'></ward_area> 
+	  </mla_area>
+	   <mla_area name='Chamarajpet' mla_no='168' code='SBC106' mla_long='77.563375' mla_latt='12.958627'>
+	  </mla_area>
+	   <mla_area name='Chikkpet' mla_no='169' code='SBC107' mla_long='77.580569' mla_latt='12.970756'>
+	  </mla_area>
+	  <mla_area name='C V Raman Nagar' mla_no='161' code='SBC108' mla_long='77.662203' mla_latt='12.984567'>
+	  </mla_area>
+	  <mla_area name='Dasarahalli' mla_no='155' code='SBC109' mla_long='77.511061' mla_latt='13.045808'>
+	  </mla_area>
+	  <mla_area name='Gandhinagar' mla_no='164' code='SBC110' mla_long='' mla_latt=''>
+	  </mla_area>
+	  <mla_area name='Govindrajnagar' mla_no='166' code='SBC111' mla_long='' mla_latt=''>
+	  </mla_area>
+	  <mla_area name='Hebbal' mla_no='158' code='SBC112' mla_long='' mla_latt=''>
+	  </mla_area>
+	  <mla_area name='Jayanagar' mla_no='173' code='SBC113' mla_long='' mla_latt=''>
+	  </mla_area>
+	  <mla_area name='K R Puram' mla_no='151' code='SBC114' mla_long='' mla_latt=''>
+	  </mla_area>
+	  <mla_area name='Mahadevpura' mla_no='174' code='SBC115' mla_long='' mla_latt=''>
+	  </mla_area>
+	  <mla_area name='Mahalakshmi Layout' mla_no='156' code='SBC116' mla_long='' mla_latt=''>
+	  </mla_area>
+	  <mla_area name='Malleshwaram' mla_no='157' code='SBC117' mla_long='' mla_latt=''>
+	  </mla_area>
+	  <mla_area name='Padmanabhanagar' mla_no='171' code='SBC118' mla_long='' mla_latt=''>
+	  </mla_area>
+	  <mla_area name='Pulakeshinagar' mla_no='159' code='SBC119' mla_long='' mla_latt=''>
+	  </mla_area>
+	  <mla_area name='Rajajinagar' mla_no='165' code='SBC120' mla_long='' mla_latt=''>
+	  </mla_area>
+	  <mla_area name='Rajarajeshwari Nagar' mla_no='154' code='SBC121' mla_long='' mla_latt=''>
+	  </mla_area>
+	  <mla_area name='Sarvagna Nagar' mla_no='160' code='SBC122' mla_long='' mla_latt=''>
+	  </mla_area>
+	  <mla_area name='Shanthinagar' mla_no='163' code='SBC123' mla_long='' mla_latt=''>
+	  </mla_area>
+	  <mla_area name='Shivajinagar' mla_no='162' code='SBC124' mla_long='' mla_latt=''>
+	  </mla_area>
+	  <mla_area name='Vijayanagar' mla_no='167' code='SBC125' mla_long='' mla_latt=''>
+	  </mla_area>
+	  <mla_area name='Yelahanka' mla_no='150' code='SBC126' mla_long='' mla_latt=''>
+	  </mla_area>
+	  <mla_area name='Yeshwanthpur' mla_no='153' code='SBC127' mla_long='' mla_latt=''>
+	  </mla_area>
+	</city>
+	
+	<city name='Lucknow' code='LKO'>
+	  <mla_area name='Malihabad' code='LKO101' mla_no='168' mla_long='80.710842' mla_latt='26.914699'>
+	  <ward_area name='Malihabad'></ward_area>
+	  <ward_area name='Kakori'></ward_area>
+	  </mla_area>
+	  <mla_area name='Bakshi Ka Talab' code='LKO102' mla_no='169' mla_long='80.891388' mla_latt='26.989166'>
+	  <ward_area name='Bakshi ka Talab'></ward_area>
+	  <ward_area name='Itounja'></ward_area>
+      <ward_area name='Mahona'></ward_area>
+      <ward_area name='Nagar Nigam'></ward_area>
+	  </mla_area>
+	  <mla_area name='Sarojini Nagar' code='LKO103' mla_no='170' mla_long='' mla_latt=''>
+	  </mla_area> 
+	  <mla_area name='Lucknow West' code='LKO104' mla_no='171'>
+	  </mla_area>
+	   <mla_area name='Lucknow North' code='LKO105' mla_no='172'>
+	  </mla_area>
+	   <mla_area name='Lucknow East' code='LKO106' mla_no='173'>
+	  </mla_area>
+	   <mla_area name='Lucknow Central' code='LKO107' mla_no='174'>
+	  </mla_area>
+	   <mla_area name='Lucknow Cantonment' code='LKO108' mla_no='175'>
+	  </mla_area>
+	  <mla_area name='Mohanlalganj' code='LKO109' mla_no='176'>
+	  </mla_area>
+	</city>
+	
+	<city name='Mumbai' code='BCT'>
+	  <mla_area name='Dharavi' code='BCT101' mla_no='178'>
+	  </mla_area>
+	   <mla_area name='Sion Koliwada' code='BCT102' mla_no='179'>
+	  </mla_area>
+	   <mla_area name='Wadala' code='BCT103' mla_no='180'>
+	  </mla_area>
+	   <mla_area name='Mahim' code='BCT104' mla_no='181'>
+	  </mla_area>
+	   <mla_area name='Worli' code='BCT105' mla_no='182'>
+	  </mla_area>
+	   <mla_area name='Shivadi' code='BCT106' mla_no='183'>
+	  </mla_area>
+	   <mla_area name='Byculla' code='BCT107' mla_no='184'>
+	  </mla_area>
+	</city>
+	
+	<city name='Chennai' code='MAS'>
+	  <mla_area name='Chennai-MLA1' code='MAS101'>
+	  </mla_area>
+	   <mla_area name='Chennai-MLA2' code='MAS102'>
+	  </mla_area>
+	   <mla_area name='Chennai-MLA3' code='MAS103'>
+	  </mla_area>
+	   <mla_area name='Chennai-MLA4' code='MAS104'>
+	  </mla_area>
+	   <mla_area name='Chennai-MLA5' code='MAS105'>
+	  </mla_area>
+	   <mla_area name='Chennai-MLA6' code='MAS106'>
+	  </mla_area>
+	   <mla_area name='Chennai-MLA7' code='MAS107'>
+	  </mla_area>
+	</city>
+	
+	
+	
+	<city name='Pune' code='PUNE'>
+	  <mla_area name='Pune-MLA1' code='PUNE101'>
+	  </mla_area>
+	   <mla_area name='Pune-MLA2' code='PUNE102'>
+	  </mla_area>
+	   <mla_area name='Pune-MLA3' code='PUNE103'>
+	  </mla_area>
+	   <mla_area name='Pune-MLA4' code='PUNE104'>
+	  </mla_area>
+	   <mla_area name='Pune-MLA5' code='PUNE105'>
+	  </mla_area>
+	   <mla_area name='Pune-MLA6' code='PUNE106'>
+	  </mla_area>
+	   <mla_area name='Pune-MLA7' code='PUNE107'>
+	  </mla_area>
+	</city>
+		
+</cities>
